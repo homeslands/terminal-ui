@@ -1,0 +1,121 @@
+{
+  "title": "VAT Request Management",
+  "refresh": "Refresh",
+  "updatedAt": "Updated at",
+  "exportExcel": "Export Excel",
+  "empty": "No VAT requests match the current filter",
+  "close": "Close",
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+  "status": {
+    "PENDING": "Pending",
+    "PROCESSING": "Processing",
+    "COMPLETED": "Completed",
+    "REJECTED": "Rejected"
+  },
+  "filter": {
+    "statusAll": "All",
+    "dateRangeInvalid": "From date must be before To date",
+    "searchPlaceholder": "Tax code / email / invoice slug / customer name",
+    "taxCodePlaceholder": "Enter tax code",
+    "advancedTitle": "Advanced filter",
+    "customerName": "Customer name",
+    "email": "Email",
+    "invoiceNumber": "Invoice number",
+    "referenceNumber": "Reference number",
+    "apply": "Apply",
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "clearAll": "Clear all filters"
+  },
+  "column": {
+    "createdAt": "Request date",
+    "referenceNumber": "Order #",
+    "customerName": "Customer / Company",
+    "taxCode": "Tax code",
+    "email": "Email",
+    "amount": "Amount",
+    "totalVatValue": "VAT collected",
+    "status": "Status",
+    "invoiceNumber": "Invoice #"
+  },
+  "customerInfo": {
+    "title": "CUSTOMER INFO",
+    "customerName": "Customer name",
+    "taxCode": "Tax code",
+    "address": "Address",
+    "email": "Email",
+    "companyName": "Company name (optional)",
+    "note": "Note",
+    "save": "Save changes",
+    "confirmTitle": "Update customer info",
+    "confirmDescription": "Confirm updating the customer info for this VAT request?",
+    "saveSuccess": "Updated successfully",
+    "saveFailed": "Update failed",
+    "errors": {
+      "customerName": {
+        "required": "Please enter customer name"
+      },
+      "taxCode": {
+        "invalidFormat": "Tax code must be exactly 10 or 13 digits"
+      },
+      "address": {
+        "required": "Please enter address"
+      },
+      "email": {
+        "invalid": "Invalid email format"
+      }
+    }
+  },
+  "accountantInfo": {
+    "invoiceNumber": "Invoice number"
+  },
+  "workflow": {
+    "title": "STATUS WORKFLOW",
+    "current": "Current",
+    "transitionTo": {
+      "PROCESSING": "Start processing",
+      "COMPLETED": "Complete",
+      "REJECTED": "Reject"
+    }
+  },
+  "detail": {
+    "description": "Manage VAT request information and workflow status"
+  },
+  "tabs": {
+    "overview": "Overview",
+    "customer": "Customer info"
+  },
+  "overview": {
+    "invoice": "ORIGINAL INVOICE",
+    "customer": "CUSTOMER INFO",
+    "accountant": "INVOICE ISSUANCE",
+    "tableName": "Table",
+    "cashier": "Cashier",
+    "invoiceDate": "Order time",
+    "requestedAt": "Requested at",
+    "companyName": "Company"
+  },
+  "transition": {
+    "title": {
+      "PROCESSING": "Start processing?",
+      "COMPLETED": "Mark as COMPLETED?",
+      "REJECTED": "Reject this request?"
+    },
+    "description": {
+      "PROCESSING": "Mark this request as being processed. The customer is not notified at this step.",
+      "COMPLETED": "Complete the invoice issuance. Enter the actual invoice number issued so the customer can reconcile.",
+      "REJECTED": "Reject the request. Please enter the reason — accountant uses it to explain to the customer."
+    },
+    "invoiceNumber": "Invoice number (*)",
+    "invoiceHint": "Auto-filled if the request already has a saved invoice number — just verify and confirm.",
+    "invoiceRequired": "Please enter an invoice number",
+    "rejectReason": "Rejection reason (*)",
+    "noteRequired": "Rejection reason must be at least 3 characters",
+    "emailNotice": "System does not auto-send email yet. Please contact customer directly if needed."
+  },
+  "sidebar": {
+    "label": "VAT Management"
+  },
+  "unsavedConfirm": "Unsaved changes. Close anyway?"
+}

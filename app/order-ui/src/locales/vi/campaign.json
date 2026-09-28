@@ -1,0 +1,80 @@
+{
+  "campaign": {
+    "title": "Chiến dịch marketing",
+    "createCampaign": "Tạo chiến dịch",
+    "editCampaign": "Chỉnh sửa chiến dịch",
+    "deleteCampaign": "Xóa chiến dịch",
+    "confirmDelete": "Bạn có chắc chắn muốn xóa chiến dịch này không?",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "name": "Tên chiến dịch",
+    "type": "Loại chiến dịch",
+    "status": "Trạng thái",
+    "startDate": "Ngày bắt đầu",
+    "endDate": "Ngày kết thúc",
+    "recipientLimit": "Giới hạn người nhận",
+    "voucherGroups": "Nhóm voucher",
+    "types": {
+      "new-user": "Người dùng mới",
+      "user-birthday": "Sinh nhật"
+    },
+    "statuses": {
+      "opening": "Đang mở",
+      "scheduled": "Đã lên lịch",
+      "closed": "Đã đóng"
+    },
+    "template": {
+      "title": "Voucher",
+      "addTemplate": "Thêm template",
+      "editTemplate": "Chỉnh sửa template",
+      "deleteTemplate": "Xóa template",
+      "templateTitle": "Tên voucher",
+      "description": "Mô tả",
+      "type": "Loại voucher",
+      "value": "Giá trị",
+      "maxUsage": "Số lần sử dụng tối đa",
+      "minOrderValue": "Giá trị đơn tối thiểu",
+      "maxItems": "Số items tối đa",
+      "duration": "Thời hạn (ngày)",
+      "usageFrequencyUnit": "Đơn vị tần suất",
+      "usageFrequencyValue": "Tần suất sử dụng",
+      "applicabilityRule": "Quy tắc áp dụng",
+      "paymentMethods": "Phương thức thanh toán",
+      "products": "Sản phẩm áp dụng",
+      "typeKey": "Loại chiến dịch áp dụng",
+      "templateStartDate": "Ngày bắt đầu template",
+      "templateEndDate": "Ngày kết thúc template",
+      "voucherTypes": {
+        "fixed_value": "Giảm tiền cố định",
+        "percent_order": "Giảm phần trăm",
+        "same_price_product": "Đồng giá sản phẩm"
+      },
+      "frequencyUnits": {
+        "hour": "Giờ",
+        "day": "Ngày",
+        "week": "Tuần",
+        "month": "Tháng",
+        "year": "Năm",
+        "unlimited": "Không giới hạn"
+      },
+      "applicabilityRules": {
+        "all_required": "Tất cả bắt buộc",
+        "at_least_one_required": "Ít nhất một"
+      },
+      "paymentMethodOptions": {
+        "cash": "Tiền mặt",
+        "bank-transfer": "Chuyển khoản",
+        "credit-card": "Thẻ tín dụng",
+        "point": "Điểm"
+      }
+    },
+    "confirmCreate": "Xác nhận tạo chiến dịch",
+    "confirmCreateDescription": "Bạn có chắc chắn muốn tạo chiến dịch này không?",
+    "confirmUpdate": "Xác nhận cập nhật chiến dịch",
+    "confirmUpdateDescription": "Bạn có chắc chắn muốn cập nhật chiến dịch này không?",
+    "empty": "Chưa có chiến dịch nào",
+    "createSuccess": "Tạo chiến dịch thành công",
+    "updateSuccess": "Cập nhật chiến dịch thành công",
+    "deleteSuccess": "Xóa chiến dịch thành công"
+  }
+}

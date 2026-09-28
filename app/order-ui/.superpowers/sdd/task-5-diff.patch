@@ -1,0 +1,787 @@
+diff --git a/app/order-ui/src/components/staff/table-payment-screen.tsx b/app/order-ui/src/components/staff/table-payment-screen.tsx
+index 6c92db0..07c3e8d 100644
+--- a/app/order-ui/src/components/staff/table-payment-screen.tsx
++++ b/app/order-ui/src/components/staff/table-payment-screen.tsx
+@@ -1,76 +1,45 @@
+-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
++import { useMemo, useEffect } from 'react'
+ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+ import { useTranslation } from 'react-i18next'
+-import {
+-  MoreHorizontal,
+-  FileText,
+-  Trash2,
+-  ChevronLeft,
+-  Info,
+-} from 'lucide-react'
+ import { PaymentPanel } from '@/components/staff/payment-panel'
+ import { PaymentSuccessScreen } from '@/components/staff/payment-success-screen'
+-import { InvoiceForm } from '@/components/staff/invoice-form'
+ import { ConfirmCancelDialog } from '@/components/staff/confirm-cancel-dialog'
+ import { PosNotFoundState } from '@/components/staff/pos-not-found'
+-import { PosPageHeader } from '@/components/staff/pos-page-header'
+ import { StaffCustomerSearchInput } from '@/components/staff/staff-customer-search-input'
+ import { StaffTableVoucherSheet } from '@/components/staff/staff-table-voucher-sheet'
+ import ConfirmClearCustomerDialog from '@/components/app/dialog/confirm-clear-customer-dialog'
+-import {
+-  Button,
+-  DropdownMenu,
+-  DropdownMenuContent,
+-  DropdownMenuItem,
+-  DropdownMenuSeparator,
+-  DropdownMenuTrigger,
+-  Tooltip,
+-  TooltipContent,
+-  TooltipProvider,
+-  TooltipTrigger,
+-} from '@/components/ui'
++import { TablePaymentHeader } from '@/components/staff/table-payment-header'
++import { TablePaymentSummary } from '@/components/staff/table-payment-summary'
++import { useTablePaymentSession } from '@/components/staff/hooks/use-table-payment-session'
+ import { useTableSessions } from '@/hooks/useTableSessions'
+ import { useOwnerSync } from '@/hooks/use-owner-sync'
+ import {
+   useDeleteOrder,
+-  useGetOrderProvisionalBill,
+-  useInitiatePayment,
+   useOrderBySlug,
+ } from '@/hooks'
+ import { useVoucherState } from '@/hooks/use-voucher-state'
+ import { useTableSessionsStore, useUserStore } from '@/stores'
+ import { mergeOrderItems } from '@/lib/staff-orders'
+ import { staffItemsToCartItem } from '@/lib/staff-cart-adapter'
+ import { calculateCartItemDisplay, calculateCartTotals } from '@/utils/cart'
+-import { OrderItemPrice } from '@/components/app/order-item-price'
+-import { getItemPriceDisplay } from '@/lib/order-item-display'
+ import { formatVnd } from '@/data/staff-data'
++import { APPLICABILITY_RULE, VOUCHER_TYPE } from '@/constants'
++import { OrderStatus, type IVoucher } from '@/types'
+ import {
+-  APPLICABILITY_RULE,
+-  PaymentMethod,
+-  paymentStatus,
+-  Role,
+-  VOUCHER_TYPE,
+-} from '@/constants'
+-import { OrderStatus } from '@/types'
+-import type { IVoucher } from '@/types'
+-import {
+-  loadDataToPrinter,
+   showErrorToast,
+   showErrorToastMessage,
+   showToast,
+ } from '@/utils'
+-import type { InvoiceRequest } from '@/types/invoice'
+ import type { OrderItem, TableCustomer } from '@/types/session'
+-
+-type Tab = 'cash' | 'transfer' | 'card'
++import { useState } from 'react'
++import { Role } from '@/constants'
+ 
+ export interface TablePaymentScreenProps {
+   /**
+    * Custom back handler. Default: navigate to /staff/table/:id (order screen).
+    * Admin: navigate to /system/table/:id.
+    */
+   onBack?: () => void
+   /**
+    * Hide PosPageHeader. Admin uses SystemLayout breadcrumb instead.
+    */
+@@ -90,59 +59,38 @@ export interface TablePaymentScreenProps {
+ export function TablePaymentScreen({
+   onBack,
+   hideHeader = false,
+   tableOrderPath = (tableId) => `/staff/table/${tableId}`,
+   onPaymentSuccess,
+ }: TablePaymentScreenProps) {
+   const { id = '' } = useParams<{ id: string }>()
+   const navigate = useNavigate()
+   const { t: tToast } = useTranslation('toast')
+   const { t: tMenu } = useTranslation('menu')
+-  const {
+-    sessions,
+-    closeSession,
+-    cancelSession,
+-    setInvoiceRequest,
+-  } = useTableSessions()
++  const { sessions, closeSession, cancelSession } = useTableSessions()
+   // Override session.orderSlug khi URL có `?order=` — tránh race với session
+   // stale từ luồng trước (vd: vừa thanh toán đơn cũ, mở payment cho đơn mới ở
+   // cùng bàn → session vẫn cache slug đơn cũ → page load nhầm).
+   const [searchParams] = useSearchParams()
+   const orderSlugFromUrl = searchParams.get('order')
+ 
+-  const [showInvoiceForm, setShowInvoiceForm] = useState(false)
+   const [confirmCancel, setConfirmCancel] = useState(false)
+-  const [tab, setTab] = useState<Tab>('transfer')
+-  const [amount, setAmount] = useState(0)
+-  const [qrCode, setQrCode] = useState('')
+-  const [isLoading, setIsLoading] = useState(false)
+-  const [isPolling, setIsPolling] = useState(false)
+-  const [isPaid, setIsPaid] = useState(false)
+-  const [initError, setInitError] = useState<string | null>(null)
+-  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+-  const hasTriggeredAutoInit = useRef(false)
+-  const initAttemptRef = useRef(0)
+   const [clearCustomerOpen, setClearCustomerOpen] = useState(false)
+ 
+   const session = sessions[id]
+   const orderSlug = orderSlugFromUrl ?? session?.orderSlug
+ 
+   const { selectCustomer } = useOwnerSync({ tableId: id, orderSlug })
+ 
+   const { data: orderData, refetch: refetchOrder } = useOrderBySlug(orderSlug)
+-  const { mutateAsync: initiatePaymentAsync } = useInitiatePayment()
+   const { mutate: deleteOrderMutate, isPending: isCancelling } =
+     useDeleteOrder()
+-  const {
+-    mutate: getOrderProvisionalBill,
+-    isPending: isPendingGetOrderProvisionalBill,
+-  } = useGetOrderProvisionalBill()
+ 
+   // Customer is set in the Info tab on the cart/order screen — payment screen is
+   // read-only for customer. Voucher is still editable here (cashier flow), but
+   // session is the source of truth.
+   const selectedCustomer = session?.customer ?? null
+ 
+   // Voucher validation prefers BE-persisted owner (truth) when it is a real
+   // customer account. Fallback to session.customer for the UI input flow so
+   // newly-picked customers work immediately before owner-sync PATCH lands.
+   const isBECustomerOwner =
+@@ -359,174 +307,48 @@ export function TablePaymentScreen({
+     await removeVoucherHook()
+     const current =
+       useTableSessionsStore.getState().sessions[id]?.voucher ?? null
+     if (current === null) {
+       showToast(tToast('toast.removeVoucherSuccess'))
+     } else {
+       showErrorToastMessage(tToast('toast.removeVoucherFailed'))
+     }
+   }
+ 
+-  const stopPolling = useCallback(() => {
+-    if (pollingRef.current) {
+-      clearInterval(pollingRef.current)
+-      pollingRef.current = null
+-    }
+-    setIsPolling(false)
+-  }, [])
+-
+-  const handlePaymentSuccess = useCallback(() => {
+-    stopPolling()
+-    setIsPaid(true)
+-    showToast(tToast('toast.paymentSuccess'))
+-  }, [stopPolling, tToast])
+-
+-  // polling — refetch every 2s until order.status === PAID
+-  useEffect(() => {
+-    if (!isPolling) return
+-
+-    pollingRef.current = setInterval(async () => {
+-      const result = await refetchOrder()
+-      if (result.data?.status === OrderStatus.PAID) {
+-        handlePaymentSuccess()
+-      }
+-    }, 2000)
+-
+-    return () => stopPolling()
+-  }, [isPolling, refetchOrder, handlePaymentSuccess, stopPolling])
+-
+-  const triggerInitiateTransfer = useCallback(async () => {
+-    if (!orderSlug) return
+-    const myAttempt = ++initAttemptRef.current
+-    setInitError(null)
+-    setIsLoading(true)
+-    try {
+-      const data = await initiatePaymentAsync({
+-        orderSlug,
+-        paymentMethod: PaymentMethod.BANK_TRANSFER,
+-      })
+-      if (myAttempt !== initAttemptRef.current) return // stale
+-      setIsLoading(false)
+-      if (data?.result?.qrCode) {
+-        setQrCode(data.result.qrCode)
+-        setIsPolling(true)
+-        setInitError(null)
+-      } else {
+-        // BE returned 2xx + no qrCode: ưu tiên detect auto-completed payment
+-        // (đơn < ~2000đ BE bỏ qua QR và auto-PAID). Chỉ rơi vào nhánh failure
+-        // nếu thực sự không có signal completed.
+-        const status = String(
+-          data?.result?.statusMessage ?? data?.result?.statusCode ?? '',
+-        ).toLowerCase()
+-        if (status === 'completed') {
+-          handlePaymentSuccess()
+-          return
+-        }
+-        const errorMsg =
+-          (data as { message?: string })?.message ||
+-          tToast('toast.qrCreationFailed') ||
+-          'Không thể tạo mã QR'
+-        setInitError(errorMsg)
+-      }
+-    } catch (err) {
+-      if (myAttempt !== initAttemptRef.current) return // stale
+-      setIsLoading(false)
+-      const errorObj = err as {
+-        response?: {
+-          data?: { statusCode?: number; errorCodeValue?: number; message?: string }
+-        }
+-        message?: string
+-      }
+-      // BE error envelope: { statusCode: 101002, message: "Order is not pending" }
+-      // (legacy code đọc errorCodeValue — vẫn check để tương thích).
+-      const code =
+-        errorObj?.response?.data?.statusCode ??
+-        errorObj?.response?.data?.errorCodeValue
+-      const msg =
+-        errorObj?.response?.data?.message ||
+-        errorObj?.message ||
+-        tToast('toast.qrCreationFailed') ||
+-        'Không thể tạo mã QR'
+-      // Bắn TOAST tường minh ngoài inline error — đặc biệt cần cho case đơn
+-      // không còn ở status pending (101002) khi user navigate từ
+-      // order-management vào trang thanh toán của đơn đã xử lý.
+-      if (typeof code === 'number') {
+-        showErrorToast(code)
+-      } else {
+-        showErrorToastMessage(msg)
+-      }
+-      setInitError(msg)
+-    }
+-  }, [orderSlug, initiatePaymentAsync, tToast, handlePaymentSuccess])
+-
+-  // Auto-init transfer payment khi mount nếu chưa có QR.
+-  // Check orderData.payment trước — nếu BE đã có sẵn payment pending với qrCode
+-  // thì reuse, không gọi init mới.
+-  useEffect(() => {
+-    if (hasTriggeredAutoInit.current) return
+-    if (tab !== 'transfer') return
+-    if (!orderSlug) return
+-    if (qrCode) return
+-    if (!orderData) return
+-
+-    // Pre-check defensive: orderData fetch fresh có thể trả status khác với
+-    // list endpoint user vừa click từ đó (sandbox đôi khi lệch giữa
+-    // /orders list và /orders/:slug detail). Nếu đơn KHÔNG còn pending,
+-    // gọi /payment/initiate sẽ chắc chắn 101002 — bỏ qua, hiện UI/toast
+-    // tường minh ngay để user không phải đợi spinner rồi mới nhận lỗi.
+-    if (!isOrderEditable) {
+-      hasTriggeredAutoInit.current = true
+-      const statusLabel =
+-        orderData.status === OrderStatus.PAID
+-          ? 'đã được thanh toán'
+-          : orderData.status === OrderStatus.FAILED
+-            ? 'đã bị huỷ'
+-            : 'đã được xử lý'
+-      const msg = `Đơn này ${statusLabel}, không thể tạo mã thanh toán mới.`
+-      showErrorToastMessage(msg)
+-      setInitError(msg)
+-      return
+-    }
+-
+-    hasTriggeredAutoInit.current = true
+-
+-    const existingPayment = orderData.payment
+-    const hasReusableQr =
+-      !!existingPayment?.qrCode &&
+-      existingPayment.statusCode !== paymentStatus.CANCELLED
+-
+-    if (hasReusableQr && existingPayment) {
+-      setQrCode(existingPayment.qrCode)
+-      setIsPolling(true)
+-    } else {
+-      void triggerInitiateTransfer()
+-    }
+-  }, [
++  // Payment session hook — pure logic, no rendering
++  const {
+     tab,
+-    orderSlug,
+-    orderData,
++    amount,
+     qrCode,
++    isLoading,
++    initError,
++    isPrinting,
++    isPaid,
++    setAmount,
++    handleTabChange,
++    handleConfirm,
+     triggerInitiateTransfer,
++    onPrintProvisional,
++  } = useTablePaymentSession({
++    orderSlug,
+     isOrderEditable,
+-  ])
++    refetchOrder,
++    orderData,
++    selectedVoucher,
++    effectiveCustomer,
++  })
+ 
+-  const handleTabChange = useCallback((next: Tab) => {
+-    setTab(next)
+-    setQrCode('')
+-    setIsPolling(false)
+-    setIsLoading(false) // defensive: ensure no stuck loading from previous tab
+-    if (next === 'cash' || next === 'card') setInitError(null)
+-    // Khi rời transfer, reset auto-init guard để lần sau quay lại fire init mới.
+-    // Auto-init effect sẽ check orderData.payment trước (reuse nếu có QR còn valid),
+-    // không spam BE.
+-    if (next !== 'transfer') hasTriggeredAutoInit.current = false
+-  }, [])
++  // P1: Pre-VAT (post-discount) subtotal for cashier math verification.
++  const preVatTotal = Math.max(
++    0,
++    subTotalBeforeDiscount - promotionDiscount - voucherDiscount,
++  )
+ 
+   if (isPaid && session) {
+     const cashChange =
+       tab === 'cash' && amount > totalWithDiscount
+         ? amount - totalWithDiscount
+         : undefined
+     return (
+       <PaymentSuccessScreen
+         tableName={session.tableName}
+         total={totalWithDiscount}
+@@ -548,384 +370,65 @@ export function TablePaymentScreen({
+   if (!session) {
+     return <PosNotFoundState message="Không tìm thấy phiên thanh toán." />
+   }
+ 
+   if (!orderSlug) {
+     return (
+       <PosNotFoundState message="Chưa có đơn hàng. Vui lòng gửi đơn trước khi thanh toán." />
+     )
+   }
+ 
+-  const handleConfirm = async () => {
+-    // Pre-payment validation: voucher requiring identity needs a selected customer.
+-    // BE reads customer/voucher from order state (set via PATCH on select/apply),
+-    // so we only need to guard the UI here — payload itself is unchanged.
+-    if (selectedVoucher?.isVerificationIdentity && !effectiveCustomer) {
+-      showErrorToastMessage(tToast('toast.voucherRequiresCustomer'))
+-      return
+-    }
+-
+-    setIsLoading(true)
+-
+-    if (tab === 'cash') {
+-      try {
+-        await initiatePaymentAsync({ orderSlug, paymentMethod: PaymentMethod.CASH })
+-        handlePaymentSuccess()
+-      } catch (err) {
+-        setIsLoading(false)
+-        const data = (
+-          err as {
+-            response?: {
+-              data?: { statusCode?: number; errorCodeValue?: number }
+-            }
+-          }
+-        )?.response?.data
+-        const code = data?.statusCode ?? data?.errorCodeValue
+-        if (typeof code === 'number') showErrorToast(code)
+-        else showErrorToastMessage(tToast('toast.paymentFailed'))
+-      }
+-    } else if (tab === 'card') {
+-      try {
+-        await initiatePaymentAsync({ orderSlug, paymentMethod: PaymentMethod.CREDIT_CARD })
+-        handlePaymentSuccess()
+-      } catch (err) {
+-        setIsLoading(false)
+-        const data = (
+-          err as {
+-            response?: {
+-              data?: { statusCode?: number; errorCodeValue?: number }
+-            }
+-          }
+-        )?.response?.data
+-        const code = data?.statusCode ?? data?.errorCodeValue
+-        if (typeof code === 'number') showErrorToast(code)
+-        else showErrorToastMessage(tToast('toast.paymentFailed'))
+-      }
+-    } else {
+-      void triggerInitiateTransfer()
+-    }
+-  }
+-
+-  const handleInvoiceSubmit = (req: InvoiceRequest) => {
+-    setInvoiceRequest(id, req)
+-    setShowInvoiceForm(false)
+-    navigate(`/staff/table/${id}/invoice`)
+-  }
+-
+   return (
+     <div className="flex h-full flex-col bg-pos-card text-pos-text">
+-      {!hideHeader && (
+-        <PosPageHeader
+-          backTo={onBack ? '' : tableOrderPath(id)}
+-          onBack={onBack}
+-          center={
+-            <div className="flex flex-col items-center gap-0.5 text-center">
+-              <div className="flex items-center gap-2">
+-                <span className="rounded bg-pos-gold px-2 py-0.5 text-sm font-bold text-white">
+-                  Bàn {session.tableName}
+-                </span>
+-                {orderData?.referenceNumber != null && (
+-                  <span className="rounded bg-pos-elevated px-2 py-0.5 text-xs font-semibold text-pos-gold">
+-                    #{orderData.referenceNumber}
+-                  </span>
+-                )}
+-              </div>
+-              <div className="flex items-center gap-2 text-[11px] text-pos-muted">
+-                {orderData?.owner ? (
+-                  <span className="truncate">
+-                    {orderData.owner.lastName} {orderData.owner.firstName}
+-                  </span>
+-                ) : (
+-                  <span className="italic">Chưa có khách</span>
+-                )}
+-                {orderData?.createdAt && (
+-                  <>
+-                    <span>·</span>
+-                    <span>
+-                      {new Date(orderData.createdAt).toLocaleTimeString(
+-                        'vi-VN',
+-                        {
+-                          hour: '2-digit',
+-                          minute: '2-digit',
+-                        },
+-                      )}
+-                    </span>
+-                  </>
+-                )}
+-              </div>
+-            </div>
+-          }
+-        />
+-      )}
++      <TablePaymentHeader
++        hideHeader={hideHeader}
++        id={id}
++        session={session}
++        orderData={orderData}
++        onBack={onBack}
++        tableOrderPath={tableOrderPath}
++      />
+ 
+       <main className="grid min-h-0 flex-1 grid-cols-2">
+         {/* Left: order detail */}
+-        <div className="flex min-h-0 flex-col px-2">
+-          {hideHeader && onBack && (
+-            <div className="flex items-center justify-between pb-1 pt-3">
+-              <Button
+-                variant="ghost"
+-                size="sm"
+-                onClick={onBack}
+-                className="-ml-2 h-7 text-pos-muted hover:bg-transparent hover:text-pos-text"
+-              >
+-                <ChevronLeft className="mr-1 h-4 w-4" />
+-                {tMenu('order.backToOrdering')}
+-              </Button>
+-              <div className="flex items-center gap-2">
+-                <span className="rounded bg-pos-gold px-2 py-0.5 text-sm font-bold text-white">
+-                  Bàn {session.tableName}
+-                </span>
+-                {orderData?.referenceNumber != null && (
+-                  <span className="rounded bg-pos-elevated px-2 py-0.5 text-xs font-semibold text-pos-gold">
+-                    #{orderData.referenceNumber}
+-                  </span>
+-                )}
+-              </div>
+-            </div>
+-          )}
+-          {/* Items list — NO header (UX-1 + UX-3) */}
+-          <ul className="flex-1 space-y-2 overflow-y-auto py-3 pr-2">
+-            {merged.map((m) => {
+-              const original = m.isCustomPrice
+-                ? m.priceNum
+-                : (m.originalPrice ?? m.priceNum)
+-              const hasPromotion = !!m.promotion && (m.promotion.value ?? 0) > 0
+-              const display = getItemPriceDisplay(
+-                {
+-                  unitPrice: original,
+-                  quantity: m.quantity,
+-                  productSlug: m.menuItemId,
+-                  promotionValue: m.promotion?.value,
+-                  isCustomPrice: m.isCustomPrice,
+-                  customPrice: m.isCustomPrice ? m.priceNum : null,
+-                },
+-                selectedVoucher,
+-              )
+-              return (
+-                <li key={`${m.menuItemId}::${m.note}`} className="py-2">
+-                  <div className="flex items-baseline gap-3 text-base">
+-                    <div className="flex min-w-0 flex-1 flex-col">
+-                      <span className="truncate font-medium text-pos-text">
+-                        {m.name}
+-                      </span>
+-                      {hasPromotion && (
+-                        <span className="text-xs italic text-pink-600">
+-                          Khuyến mãi -{m.promotion!.value}%
+-                        </span>
+-                      )}
+-                    </div>
+-                    <span className="w-14 shrink-0 text-center text-lg font-bold text-pos-text">
+-                      ×{m.quantity}
+-                    </span>
+-                    <OrderItemPrice
+-                      originalPrice={display.originalPrice}
+-                      finalPrice={display.finalPrice}
+-                      showStrikethrough={display.showStrikethrough}
+-                      promoLabel={display.promoLabel}
+-                      voucherLabel={display.voucherLabel}
+-                      className="w-28"
+-                    />
+-                  </div>
+-                  {m.note && (
+-                    <p className="mt-1 text-sm italic text-pos-dim">{m.note}</p>
+-                  )}
+-                </li>
+-              )
+-            })}
+-          </ul>
+-
+-          {/* Total + actions — UX-1 + UX-2 + UX-3 + UX-4 */}
+-          {(() => {
+-            // P1: Pre-VAT (post-discount) subtotal for cashier math verification.
+-            const preVatTotal = Math.max(
+-              0,
+-              subTotalBeforeDiscount - promotionDiscount - voucherDiscount,
+-            )
+-
+-            // VAT rate label — show "(X%)" only when all items share the same rate.
+-            const items = orderData?.orderItems ?? []
+-            const vatRates = items
+-              .map((it) => it.vatRate ?? it.variant?.product?.vatRate ?? 0)
+-              .filter((r) => r > 0)
+-            const uniqueRates = [...new Set(vatRates)]
+-            const vatRateLabel =
+-              uniqueRates.length === 1 ? `VAT (${uniqueRates[0]}%)` : 'VAT'
+-
+-            // P2: detect "promotion dropped by voucher" → show 0đ row with tooltip
+-            const hasItemsWithPromotion = items.some(
+-              (it) => (it.promotion?.value ?? 0) > 0,
+-            )
+-            const voucher = orderData?.voucher
+-            const voucherDropsPromotion =
+-              !!voucher &&
+-              (voucher.applicabilityRule ===
+-                APPLICABILITY_RULE.AT_LEAST_ONE_REQUIRED ||
+-                voucher.type === VOUCHER_TYPE.SAME_PRICE_PRODUCT)
+-            const isPromoDroppedByVoucher =
+-              hasItemsWithPromotion &&
+-              voucherDropsPromotion &&
+-              promotionDiscount === 0
+-
+-            const showPromotionRow =
+-              promotionDiscount > 0 || isPromoDroppedByVoucher
+-
+-            return (
+-              <div className="space-y-1 border-t border-pos-border py-3 pr-2">
+-                {/* Subtotal */}
+-                <div className="flex items-baseline justify-between">
+-                  <span className="text-sm text-pos-muted">
+-                    {tMenu('order.subTotal')}
+-                  </span>
+-                  <span className="text-sm tabular-nums text-pos-text">
+-                    {formatVnd(subTotalBeforeDiscount)}
+-                  </span>
+-                </div>
+-
+-                {/* Promotion discount — show 0đ row when voucher overrides it */}
+-                {showPromotionRow && (
+-                  <div className="flex items-baseline justify-between">
+-                    <span
+-                      className={`inline-flex items-center gap-1 text-sm ${
+-                        isPromoDroppedByVoucher
+-                          ? 'text-pos-muted'
+-                          : 'text-emerald-600'
+-                      }`}
+-                    >
+-                      {tMenu('order.promotionDiscount')}
+-                      {isPromoDroppedByVoucher && (
+-                        <TooltipProvider delayDuration={150}>
+-                          <Tooltip>
+-                            <TooltipTrigger asChild>
+-                              <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground" />
+-                            </TooltipTrigger>
+-                            <TooltipContent side="top" className="max-w-xs">
+-                              Khuyến mãi không áp dụng khi món đang dùng voucher
+-                            </TooltipContent>
+-                          </Tooltip>
+-                        </TooltipProvider>
+-                      )}
+-                    </span>
+-                    <span
+-                      className={`text-sm font-medium tabular-nums ${
+-                        isPromoDroppedByVoucher
+-                          ? 'text-pos-muted'
+-                          : 'text-emerald-600'
+-                      }`}
+-                    >
+-                      -{formatVnd(promotionDiscount)}
+-                    </span>
+-                  </div>
+-                )}
+-
+-                {/* Voucher discount */}
+-                {voucherDiscount > 0 && (
+-                  <div className="flex items-baseline justify-between">
+-                    <span className="text-sm text-emerald-600">
+-                      {tMenu('order.voucherDiscount')}
+-                    </span>
+-                    <span className="text-sm font-medium tabular-nums text-emerald-600">
+-                      -{formatVnd(voucherDiscount)}
+-                    </span>
+-                  </div>
+-                )}
+-
+-                {/* P1: Tạm tính sau giảm (pre-VAT) */}
+-                <div className="flex items-baseline justify-between border-t border-pos-border pt-1">
+-                  <span className="text-sm font-semibold text-pos-text">
+-                    Tạm tính sau giảm
+-                  </span>
+-                  <span className="text-sm font-semibold tabular-nums text-pos-text">
+-                    {formatVnd(preVatTotal)}
+-                  </span>
+-                </div>
+-
+-                {/* P1: VAT (explicit row, replaces "Trong đó VAT") */}
+-                {totalVatAmount > 0 && (
+-                  <div className="flex items-baseline justify-between">
+-                    <span className="text-sm italic text-pos-muted">
+-                      {vatRateLabel}
+-                    </span>
+-                    <span className="text-sm italic tabular-nums text-pos-muted">
+-                      +{formatVnd(totalVatAmount)}
+-                    </span>
+-                  </div>
+-                )}
+-
+-                {/* Grand total */}
+-                <div className="flex items-baseline justify-between border-t border-pos-border pt-1">
+-                  <span className="text-sm font-semibold text-pos-text">
+-                    Tổng tiền
+-                  </span>
+-                  <span className="text-3xl font-bold tabular-nums text-pos-gold">
+-                    {formatVnd(totalWithDiscount)}
+-                  </span>
+-                </div>
+-
+-                <div className="mt-3 flex justify-end">
+-                  <DropdownMenu>
+-                    <DropdownMenuTrigger asChild>
+-                      <Button
+-                        variant="outline"
+-                        size="sm"
+-                        aria-label="Thao tác khác"
+-                      >
+-                        <MoreHorizontal className="mr-1 h-4 w-4" />
+-                        Thao tác
+-                      </Button>
+-                    </DropdownMenuTrigger>
+-                    <DropdownMenuContent align="end">
+-                      <DropdownMenuItem
+-                        onClick={() => setShowInvoiceForm(true)}
+-                      >
+-                        <FileText className="mr-2 h-4 w-4" />
+-                        Xuất hoá đơn
+-                      </DropdownMenuItem>
+-                      <DropdownMenuSeparator />
+-                      <DropdownMenuItem
+-                        onClick={() => setConfirmCancel(true)}
+-                        className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+-                      >
+-                        <Trash2 className="mr-2 h-4 w-4" />
+-                        Huỷ đơn
+-                      </DropdownMenuItem>
+-                    </DropdownMenuContent>
+-                  </DropdownMenu>
+-                </div>
+-              </div>
+-            )
+-          })()}
+-        </div>
++        <TablePaymentSummary
++          hideHeader={hideHeader}
++          onBack={onBack}
++          id={id}
++          session={session}
++          orderData={orderData}
++          merged={merged}
++          selectedVoucher={selectedVoucher}
++          subTotalBeforeDiscount={subTotalBeforeDiscount}
++          promotionDiscount={promotionDiscount}
++          voucherDiscount={voucherDiscount}
++          preVatTotal={preVatTotal}
++          totalVatAmount={totalVatAmount}
++          totalWithDiscount={totalWithDiscount}
++          onCancel={() => setConfirmCancel(true)}
++        />
+ 
+         {/* Right: payment panel — hero action area */}
+         <div className="min-h-0 overflow-y-auto border-l-2 border-pos-gold/20 bg-pos-card p-2">
+           <PaymentPanel
+             total={totalWithDiscount}
+             tab={tab}
+             onTabChange={handleTabChange}
+             onConfirm={handleConfirm}
+             qrCode={qrCode}
+             isLoading={isLoading}
+             amount={amount}
+             onAmountChange={setAmount}
+             initError={initError}
+             onRetryInit={() => { void triggerInitiateTransfer() }}
+-            onPrintProvisional={() => {
+-              if (!orderSlug) return
+-              getOrderProvisionalBill(orderSlug, {
+-                onSuccess: (data: Blob) => {
+-                  showToast(tToast('toast.exportOrderProvisionalBillSuccess'))
+-                  loadDataToPrinter(data)
+-                },
+-              })
+-            }}
+-            isPrinting={isPendingGetOrderProvisionalBill}
++            onPrintProvisional={onPrintProvisional}
++            isPrinting={isPrinting}
+             customerSlot={
+               <>
+                 {!isOrderEditable && (
+                   <div className="mb-2 rounded border-l-4 border-amber-500 bg-amber-100/60 px-3 py-2 text-xs text-amber-800">
+                     {tMenu('order.paidOrderReadonly')}
+                   </div>
+                 )}
+                 <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                   <StaffCustomerSearchInput
+                     customer={effectiveCustomer}
+@@ -942,27 +445,20 @@ export function TablePaymentScreen({
+                     onRemove={handleRemoveVoucher}
+                     disabled={!isOrderEditable}
+                   />
+                 </div>
+               </>
+             }
+           />
+         </div>
+       </main>
+ 
+-      {showInvoiceForm && (
+-        <InvoiceForm
+-          onSubmit={handleInvoiceSubmit}
+-          onCancel={() => setShowInvoiceForm(false)}
+-        />
+-      )}
+-
+       <ConfirmCancelDialog
+         open={confirmCancel}
+         isPending={isCancelling}
+         onConfirm={() => {
+           deleteOrderMutate(orderSlug, {
+             onSuccess: () => {
+               cancelSession(id)
+               setConfirmCancel(false)
+               showToast(tToast('toast.cancelOrderSuccess'))
+               if (onPaymentSuccess) {

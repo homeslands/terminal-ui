@@ -1,0 +1,124 @@
+{
+  "title": "Quản lý yêu cầu VAT",
+  "refresh": "Làm mới",
+  "updatedAt": "Cập nhật lúc",
+  "exportExcel": "Export Excel",
+  "empty": "Chưa có yêu cầu VAT nào trong khoảng filter",
+  "close": "Đóng",
+  "cancel": "Huỷ",
+  "confirm": "Xác nhận",
+  "status": {
+    "PENDING": "Chờ xử lý",
+    "PROCESSING": "Đang xử lý",
+    "COMPLETED": "Hoàn thành",
+    "REJECTED": "Từ chối"
+  },
+  "filter": {
+    "statusAll": "Tất cả",
+    "dateRangeInvalid": "Từ ngày phải trước Đến ngày",
+    "searchPlaceholder": "MST / email / mã HĐ / tên khách",
+    "taxCodePlaceholder": "Nhập mã số thuế",
+    "advancedTitle": "Bộ lọc nâng cao",
+    "customerName": "Tên khách hàng",
+    "email": "Email",
+    "invoiceNumber": "Số hoá đơn",
+    "referenceNumber": "Số đơn (reference)",
+    "apply": "Áp dụng",
+    "cancel": "Huỷ",
+    "clear": "Xoá lọc",
+    "clearAll": "Xoá tất cả filter"
+  },
+  "column": {
+    "createdAt": "Ngày yêu cầu",
+    "referenceNumber": "Số đơn",
+    "customerName": "Khách / Công ty",
+    "taxCode": "MST",
+    "email": "Email",
+    "amount": "Tiền HĐ",
+    "totalVatValue": "VAT đã thu",
+    "status": "Trạng thái",
+    "invoiceNumber": "Số HĐ"
+  },
+  "customerInfo": {
+    "title": "THÔNG TIN KHÁCH",
+    "customerName": "Tên khách hàng",
+    "taxCode": "Mã số thuế",
+    "address": "Địa chỉ",
+    "email": "Email",
+    "companyName": "Tên công ty (nếu có)",
+    "note": "Ghi chú",
+    "save": "Lưu thay đổi",
+    "saveSuccess": "Cập nhật thông tin khách hàng thành công",
+    "saveFailed": "Cập nhật thất bại",
+    "confirmTitle": "Cập nhật thông tin khách hàng",
+    "confirmDescription": "Xác nhận cập nhật thông tin khách hàng cho yêu cầu xuất hoá đơn VAT này?",
+    "errors": {
+      "customerName": {
+        "required": "Vui lòng nhập tên khách hàng"
+      },
+      "taxCode": {
+        "invalidFormat": "Mã số thuế phải đúng 10 hoặc 13 chữ số"
+      },
+      "address": {
+        "required": "Vui lòng nhập địa chỉ"
+      },
+      "email": {
+        "invalid": "Email không hợp lệ"
+      }
+    }
+  },
+  "accountantInfo": {
+    "invoiceNumber": "Số hoá đơn"
+  },
+  "workflow": {
+    "title": "WORKFLOW STATUS",
+    "current": "Hiện tại",
+    "transitionTo": {
+      "PENDING": "Quay về chờ",
+      "PROCESSING": "Bắt đầu xử lý",
+      "COMPLETED": "Hoàn thành",
+      "REJECTED": "Từ chối"
+    }
+  },
+  "detail": {
+    "description": "Quản lý thông tin và trạng thái yêu cầu xuất hoá đơn VAT"
+  },
+  "tabs": {
+    "overview": "Tổng quan",
+    "customer": "Thông tin khách"
+  },
+  "overview": {
+    "invoice": "HOÁ ĐƠN GỐC",
+    "customer": "THÔNG TIN KHÁCH",
+    "accountant": "PHÁT HÀNH HOÁ ĐƠN",
+    "tableName": "Bàn",
+    "cashier": "Thu ngân",
+    "invoiceDate": "Thời gian đặt",
+    "requestedAt": "Ngày yêu cầu",
+    "companyName": "Công ty"
+  },
+  "transition": {
+    "title": {
+      "PENDING": "Quay về Đang chờ?",
+      "PROCESSING": "Bắt đầu xử lý?",
+      "COMPLETED": "Chuyển sang HOÀN THÀNH?",
+      "REJECTED": "Từ chối yêu cầu này?"
+    },
+    "description": {
+      "PENDING": "Đưa yêu cầu này về trạng thái chờ xử lý. Dùng khi cần làm lại từ đầu.",
+      "PROCESSING": "Đánh dấu đơn này đang được xử lý. Khách không nhận thông báo ở bước này.",
+      "COMPLETED": "Hoàn tất xuất hoá đơn. Nhập số hoá đơn thực tế đã phát hành để khách đối chiếu.",
+      "REJECTED": "Từ chối yêu cầu. Vui lòng nhập lý do — kế toán dùng để giải thích với khách."
+    },
+    "invoiceNumber": "Số hoá đơn (*)",
+    "invoiceHint": "Hệ thống tự điền nếu đơn đã có số hoá đơn lưu trước đó — chỉ cần kiểm tra rồi xác nhận.",
+    "invoiceRequired": "Vui lòng nhập số hoá đơn",
+    "rejectReason": "Lý do từ chối (*)",
+    "noteRequired": "Lý do từ chối tối thiểu 3 ký tự",
+    "emailNotice": "Hệ thống tạm thời chưa tự gửi email cho khách. Vui lòng liên hệ trực tiếp nếu cần."
+  },
+  "sidebar": {
+    "label": "Quản lý VAT"
+  },
+  "unsavedConfirm": "Có thay đổi chưa lưu. Đóng?"
+}

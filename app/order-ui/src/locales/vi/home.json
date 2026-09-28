@@ -1,0 +1,105 @@
+{
+  "home": {
+    "aboutUsDescription": "Nhà hàng fine-dining ẩm thực Âu theo mùa, ấm cúng và tinh tế. Hãy đặt bàn cùng chúng tôi!",
+    "bestSeller": "Sản phẩm bán chạy",
+    "contactUs": "Liên hệ với chúng tôi",
+    "description": "Đây là trang chủ",
+    "exploreMenu": "Các sản phẩm nổi bật",
+    "fanpage": "Facebook",
+    "homeDescription": "THE TERMINAL là nhà hàng fine-dining ẩm thực Âu, ẩn mình trong một nhà ga hàng hoá xưa được phục dựng ở cuối tuyến đường ray cũ — thực đơn theo mùa, những buổi tối lung linh ánh nến, và một căn bếp tận hiến cho sự tinh tế hơn là tốc độ.",
+    "homeDescription2": "Từng chi tiết – từ gỗ sồi tái chế, tường gạch quét vôi cho đến ngọn đèn đồng còn sót lại của nhà ga xưa – đều được bài trí có chủ đích, để mỗi món ăn như một tấm bưu thiếp và mỗi ly vang như một tấm vé đến miền tinh tế.",
+    "learnAboutUs": "Tìm hiểu về chúng tôi",
+    "learnMore": "Tìm hiểu thêm",
+    "menu": "Thực đơn",
+    "newProduct": "Sản phẩm mới",
+    "title": "Trang chủ",
+    "topPromotion": "Khuyến mãi hàng đầu",
+    "newsSection": {
+      "title": "Tin tức sự kiện"
+    },
+    "videoSection": {
+      "title": "HƯỚNG DẪN ĐĂNG KÝ THÀNH VIÊN"
+    },
+    "viewMenu": "Xem thêm MENU",
+    "viewMore": "Xem thêm",
+    "highlightMenu": {
+      "starters": "Món khai vị",
+      "mainCourses": "Món chính",
+      "desserts": "Tráng miệng",
+      "cheers": "Đồ uống",
+      "combo": "Combo"
+    },
+    "hero": {
+      "established": "EST · 2026",
+      "title": "THE TERMINAL",
+      "subtitle": "Fine Dining · Bếp Âu",
+      "exploreMenu": "Khám phá thực đơn",
+      "reserve": "Đặt bàn",
+      "scroll": "Kéo xuống"
+    },
+    "about": {
+      "eyebrow": "Track 04 · All Aboard",
+      "title": "Dựng trong một nhà kho hàng hoá xưa.",
+      "quote": "Hành trình là bữa ăn, và bữa ăn cũng là hành trình.",
+      "author": "Bếp trưởng M. Kovács",
+      "yearsValue": "02",
+      "yearsLabel": "Năm phục vụ",
+      "dishesValue": "21",
+      "dishesLabel": "Món trên thực đơn",
+      "seatsValue": "48",
+      "seatsLabel": "Chỗ ngồi trong phòng"
+    },
+    "billOfFare": "Thực đơn",
+    "menuTitle": "Thực đơn",
+    "menuSubtitle": "Thực đơn Âu theo mùa, bày biện tinh tế — khám phá những món signature của chúng tôi.",
+    "location": {
+      "eyebrow": "Bảng giờ khởi hành",
+      "title": "Tìm đến The Terminal",
+      "subtitle": "Ba điểm dừng trên cùng một tuyến — cùng giờ mở cửa, cùng một gian bếp, cùng một Chủ nhật dài.",
+      "branch": "Chi nhánh",
+      "hoursEyebrow": "Bảng giờ khởi hành",
+      "hoursTitle": "Giờ mở cửa",
+      "hotlineLabel": "Hotline",
+      "hotline": "0886 128 008",
+      "emailLabel": "Email",
+      "email": "info@theterminal.com.vn",
+      "day": "Ngày",
+      "serviceWindow": "Khung giờ phục vụ",
+      "hours": {
+        "monday": "10:30 — 22:00",
+        "tuesday": "10:30 — 22:00",
+        "wednesday": "10:30 — 22:00",
+        "thursday": "10:30 — 22:00",
+        "friday": "10:30 — 23:00",
+        "saturday": "10:30 — 23:00",
+        "sunday": "10:30 — 22:00"
+      },
+      "branches": {
+        "villa": {
+          "name": "The Villa",
+          "address": "290 Điện Biên Phủ, P. Xuân Hoà, TP.HCM",
+          "note": "(ngã ba Lê Ngô Cát & Điện Biên Phủ)"
+        },
+        "docLap": {
+          "name": "Độc Lập",
+          "address": "106 Nguyễn Thị Minh Khai, P. Xuân Hoà, TP.HCM",
+          "note": "(ngay góc Nam Kỳ Khởi Nghĩa)"
+        },
+        "diamond": {
+          "name": "Diamond Plaza",
+          "address": "Tầng 5, Diamond Plaza, 34 Lê Duẩn, P. Sài Gòn, TP.HCM",
+          "note": "(sân thượng · view thành phố)"
+        }
+      },
+      "days": {
+        "monday": "Thứ Hai",
+        "tuesday": "Thứ Ba",
+        "wednesday": "Thứ Tư",
+        "thursday": "Thứ Năm",
+        "friday": "Thứ Sáu",
+        "saturday": "Thứ Bảy",
+        "sunday": "Chủ Nhật"
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+export const VAT_PERMISSIONS = {
+  VIEW: 'VIEW_VAT_REQUEST',
+  EDIT: 'EDIT_VAT_REQUEST',
+  EDIT_ACCOUNTANT: 'EDIT_ACCOUNTANT_INFO',
+  UPDATE_STATUS: 'UPDATE_VAT_STATUS',
+} as const
+
+export type VatPermissionCode = (typeof VAT_PERMISSIONS)[keyof typeof VAT_PERMISSIONS]

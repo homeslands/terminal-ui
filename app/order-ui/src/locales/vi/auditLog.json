@@ -1,0 +1,66 @@
+{
+  "auditLog": {
+    "title": "Lịch sử audit",
+    "tab": { "viewer": "Lịch sử thay đổi", "config": "Cấu hình theo dõi" },
+    "col": {
+      "createdAt": "Thời gian",
+      "user": "Người thực hiện",
+      "event": "Sự kiện",
+      "entity": "Đối tượng",
+      "summary": "Tóm tắt thay đổi",
+      "action": "Chi tiết"
+    },
+    "event": { "Create": "Tạo mới", "Update": "Cập nhật", "Delete": "Xoá" },
+    "systemActor": "Nhân viên",
+    "entityLabels": {
+      "Order": "Đơn hàng",
+      "User": "Người dùng",
+      "Voucher": "Voucher",
+      "Product": "Sản phẩm",
+      "Menu": "Menu",
+      "Promotion": "Khuyến mãi",
+      "GiftCard": "Thẻ quà tặng",
+      "Branch": "Chi nhánh",
+      "Table": "Bàn"
+    },
+    "summary": {
+      "created": "Tạo mới",
+      "deleted": "Đã xoá",
+      "updateWithExtra": "{{head}} (+{{count}} khác)"
+    },
+    "filter": {
+      "user": "Người dùng",
+      "userPlaceholder": "Tìm theo số điện thoại",
+      "userEmpty": "Không có người dùng",
+      "userLoading": "Đang tải danh sách...",
+      "entity": "Đối tượng",
+      "entityAll": "Tất cả",
+      "entityDisabled": "(đã tắt)",
+      "event": "Sự kiện",
+      "date": "Khoảng thời gian",
+      "reset": "Xoá bộ lọc"
+    },
+    "sheet": {
+      "title": "Chi tiết thay đổi",
+      "before": "Trước",
+      "after": "Sau",
+      "copyRaw": "Sao chép JSON",
+      "noChange": "Không có thay đổi",
+      "close": "Đóng"
+    },
+    "config": {
+      "colEntity": "Đối tượng",
+      "colEnabled": "Bật theo dõi",
+      "statusActive": "Đang theo dõi",
+      "statusPaused": "Đã tạm dừng",
+      "disableTitle": "Tắt theo dõi audit?",
+      "disableBody": "Tắt audit sẽ ngưng ghi nhận thay đổi của {{entity}}. Lịch sử cũ vẫn được giữ. Tiếp tục?",
+      "disableConfirm": "Tắt audit",
+      "cancel": "Huỷ"
+    },
+    "empty": {
+      "viewer": "Chưa có log nào khớp bộ lọc.",
+      "config": "Chưa có cấu hình. Hãy thử tải lại."
+    }
+  }
+}

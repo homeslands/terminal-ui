@@ -1,0 +1,821 @@
+diff --git a/app/order-ui/src/api/vat-admin.ts b/app/order-ui/src/api/vat-admin.ts
+index 0e6f682..f9ca820 100644
+--- a/app/order-ui/src/api/vat-admin.ts
++++ b/app/order-ui/src/api/vat-admin.ts
+@@ -1,14 +1,13 @@
+ import http from '@/utils/http'
+ import type {
+   IApiResponse,
+-  IUpdateAccountantInfoBody,
+   IUpdateVatRequestBody,
+   IUpdateVatStatusBody,
+   IVatRequestListItem,
+   IVatRequestListParams,
+   IVatRequestListResponse,
+ } from '@/types'
+ 
+ /**
+  * GET /vat-request — paginated list. BE chỉ accept 1 status per request.
+  * UI single-select (PENDING / PROCESSING / COMPLETED / REJECTED / undefined=all).
+@@ -37,32 +36,20 @@ export async function updateVatRequest(
+   slug: string,
+   body: IUpdateVatRequestBody,
+ ): Promise<IApiResponse<IVatRequestListItem>> {
+   const response = await http.patch<IApiResponse<IVatRequestListItem>>(
+     `/vat-request/${slug}`,
+     body,
+   )
+   return response.data
+ }
+ 
+-/** Bước 5 — Kế toán cập nhật số HĐ + ghi chú nội bộ. */
+-export async function updateAccountantInfo(
+-  slug: string,
+-  body: IUpdateAccountantInfoBody,
+-): Promise<IApiResponse<IVatRequestListItem>> {
+-  const response = await http.patch<IApiResponse<IVatRequestListItem>>(
+-    `/vat-request/${slug}/accountant-info`,
+-    body,
+-  )
+-  return response.data
+-}
+-
+ /** Bước 7 — Chuyển trạng thái workflow. */
+ export async function updateVatStatus(
+   slug: string,
+   body: IUpdateVatStatusBody,
+ ): Promise<IApiResponse<IVatRequestListItem>> {
+   const response = await http.patch<IApiResponse<IVatRequestListItem>>(
+     `/vat-request/${slug}/status`,
+     body,
+   )
+   return response.data
+diff --git a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/accountant-info-section.tsx b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/accountant-info-section.tsx
+index 896be1b..4d50c59 100644
+--- a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/accountant-info-section.tsx
++++ b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/accountant-info-section.tsx
+@@ -32,38 +32,36 @@ export function AccountantInfoSection({
+   )
+ 
+   const {
+     register,
+     handleSubmit,
+     formState: { errors, dirtyFields },
+   } = useForm<TVatUpdateAccountant>({
+     resolver: zodResolver(vatUpdateAccountantSchema),
+     defaultValues: {
+       invoiceNumber: vatRequest.invoiceNumber ?? '',
+-      accountantNote: vatRequest.accountantNote ?? '',
+     },
+   })
+ 
+-  // PATCH /vat-request/:slug/accountant-info nhận full 2 field — gửi cả 2 kể
+-  // cả khi chỉ dirty 1 để tránh BE clear field undefined.
++  // PATCH /vat-request/:slug/status với status = current để chỉ update invoiceNumber.
++  // accountantNote không còn trong /status body — đã drop khỏi UI.
+   const onSubmit = (values: TVatUpdateAccountant) => {
+     if (Object.keys(dirtyFields).length === 0) return
+     setPendingPayload({
+       invoiceNumber: values.invoiceNumber ?? '',
+-      accountantNote: values.accountantNote ?? '',
+     })
+   }
+ 
+   const handleConfirm = () => {
+     if (!pendingPayload) return
+     mutate(
+-      { slug: vatRequest.slug, body: pendingPayload },
++      { slug: vatRequest.slug, currentStatus: vatRequest.status, invoiceNumber: pendingPayload.invoiceNumber },
+       {
+         onSuccess: (resp) => {
+           showToast(
+             tToast('toast.vatAccountantUpdateSuccess', 'Cập nhật kế toán info thành công'),
+           )
+           onUpdated(resp.result)
+           setPendingPayload(null)
+         },
+         onError: (err: unknown) => {
+           // Toast luôn dùng Vietnamese fallback — tránh hiển BE message Anh
+@@ -97,48 +95,36 @@ export function AccountantInfoSection({
+             type="text"
+             data-testid="vat-accountant-invoice-number"
+             disabled={isLocked}
+             className="rounded border px-2 py-1 text-sm disabled:bg-muted disabled:opacity-70"
+             {...register('invoiceNumber')}
+           />
+           {errors.invoiceNumber && (
+             <span className="text-xs text-destructive">{errors.invoiceNumber.message}</span>
+           )}
+         </div>
+-        <div className="flex flex-col gap-1">
+-          <label className="text-xs text-muted-foreground">
+-            {t('accountantInfo.note', 'Ghi chú nội bộ')}
+-          </label>
+-          <textarea
+-            data-testid="vat-accountant-note"
+-            disabled={isLocked}
+-            rows={2}
+-            className="rounded border px-2 py-1 text-sm disabled:bg-muted disabled:opacity-70"
+-            {...register('accountantNote')}
+-          />
+-        </div>
+         {!isLocked && (
+           <Button
+             type="submit"
+             data-testid="vat-accountant-save"
+             disabled={isPending}
+             size="sm"
+           >
+             {t('accountantInfo.save', 'Lưu')}
+           </Button>
+         )}
+       </form>
+ 
+       <ConfirmUpdateVatRequestDialog
+         open={pendingPayload !== null}
+         onOpenChange={(o) => !o && !isPending && setPendingPayload(null)}
+         title={t('accountantInfo.confirmTitle', 'Cập nhật thông tin kế toán')}
+         description={t(
+           'accountantInfo.confirmDescription',
+-          'Xác nhận cập nhật số hoá đơn / ghi chú nội bộ cho yêu cầu này?',
++          'Xác nhận cập nhật số hoá đơn cho yêu cầu này?',
+         )}
+         isPending={isPending}
+         onConfirm={handleConfirm}
+       />
+     </section>
+   )
+ }
+diff --git a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/overview-tab.tsx b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/overview-tab.tsx
+index f66c143..42ca0c6 100644
+--- a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/overview-tab.tsx
++++ b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/overview-tab.tsx
+@@ -62,23 +62,20 @@ export function OverviewTab({ vatRequest }: OverviewTabProps) {
+         )}
+         {v.note && (
+           <Row label={t('customerInfo.note', 'Ghi chú')}>{v.note}</Row>
+         )}
+       </Group>
+ 
+       <Group title={t('overview.accountant', 'KẾ TOÁN')}>
+         <Row label={t('accountantInfo.invoiceNumber', 'Số hoá đơn')}>
+           <span className="font-mono">{v.invoiceNumber || '—'}</span>
+         </Row>
+-        <Row label={t('accountantInfo.note', 'Ghi chú nội bộ')}>
+-          {v.accountantNote || '—'}
+-        </Row>
+         <Row label={t('overview.requestedAt', 'Ngày yêu cầu')}>
+           {moment(v.createdAt).format('HH:mm DD/MM/YYYY')}
+         </Row>
+       </Group>
+     </div>
+   )
+ }
+ 
+ function Group({
+   title,
+diff --git a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/vat-request-detail-sheet.tsx b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/vat-request-detail-sheet.tsx
+index 4a59676..c7e2ac4 100644
+--- a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/vat-request-detail-sheet.tsx
++++ b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/vat-request-detail-sheet.tsx
+@@ -1,12 +1,12 @@
+ import { useEffect, useState } from 'react'
+-import { CheckCircle2, PlayCircle, XCircle } from 'lucide-react'
++import { CheckCircle2, PlayCircle, RotateCcw, XCircle } from 'lucide-react'
+ import { useTranslation } from 'react-i18next'
+ 
+ import {
+   Badge,
+   Button,
+   Sheet,
+   SheetContent,
+   SheetDescription,
+   SheetFooter,
+   SheetHeader,
+@@ -36,32 +36,35 @@ const STATUS_COLORS: Record<VatRequestStatus, string> = {
+   [VatRequestStatus.PROCESSING]: 'bg-blue-100 text-blue-700',
+   [VatRequestStatus.COMPLETED]: 'bg-green-100 text-green-700',
+   [VatRequestStatus.REJECTED]: 'bg-red-100 text-red-700',
+ }
+ 
+ type TransitionMeta = {
+   variant: 'default' | 'outline' | 'destructive'
+   Icon: typeof CheckCircle2
+ }
+ 
+-/** UX chuẩn ngành: PROCESSING = neutral outline, COMPLETED = primary (gold,
+- *  positive next-natural step), REJECTED = destructive (red). Icons giúp
+- *  nhận diện nhanh không cần đọc chữ. */
++/** UX: PENDING = rollback outline (RotateCcw), PROCESSING = neutral outline,
++ *  COMPLETED = primary (positive next-natural step), REJECTED = destructive (red).
++ *  Icons giúp nhận diện nhanh không cần đọc chữ. */
+ const TRANSITION_META: Record<VatRequestStatus, TransitionMeta> = {
+-  [VatRequestStatus.PENDING]: { variant: 'outline', Icon: PlayCircle },
++  [VatRequestStatus.PENDING]: { variant: 'outline', Icon: RotateCcw },
+   [VatRequestStatus.PROCESSING]: { variant: 'outline', Icon: PlayCircle },
+   [VatRequestStatus.COMPLETED]: { variant: 'default', Icon: CheckCircle2 },
+   [VatRequestStatus.REJECTED]: { variant: 'destructive', Icon: XCircle },
+ }
+ 
+-/** Forward transitions (theo state machine doc). Hide khi terminal. */
++/** LEFT group transitions: PENDING (rollback) + PROCESSING + COMPLETED.
++ *  RIGHT group: REJECTED — tách riêng phía bên phải footer.
++ *  Free transitions: canTransition chỉ chặn same-status. */
+ const FORWARD_TARGETS: VatRequestStatus[] = [
++  VatRequestStatus.PENDING,
+   VatRequestStatus.PROCESSING,
+   VatRequestStatus.COMPLETED,
+ ]
+ 
+ /**
+  * Pattern Sheet shadcn chuẩn: SheetHeader (title + status) → scrollable body
+  * (sections customer + accountant) → SheetFooter sticky (workflow transitions
+  * trái + Close phải). Tuân theo industry RBAC admin tools: state-changing
+  * actions ở footer, edit forms inline trong body.
+  */
+diff --git a/app/order-ui/src/hooks/use-vat-admin.ts b/app/order-ui/src/hooks/use-vat-admin.ts
+index 9712c9a..293a1a6 100644
+--- a/app/order-ui/src/hooks/use-vat-admin.ts
++++ b/app/order-ui/src/hooks/use-vat-admin.ts
+@@ -1,30 +1,29 @@
+ import { useMemo } from 'react'
+ import {
+   useMutation,
+   useQuery,
+   useQueryClient,
+ } from '@tanstack/react-query'
+ 
+ import {
+   getVatRequests,
+-  updateAccountantInfo,
+   updateVatRequest,
+   updateVatStatus,
+ } from '@/api/vat-admin'
+ import { QUERYKEY, VAT_PERMISSIONS } from '@/constants'
+ import { useUserStore } from '@/stores'
+ import type {
+-  IUpdateAccountantInfoBody,
+   IUpdateVatRequestBody,
+   IUpdateVatStatusBody,
+   IVatRequestListParams,
++  VatRequestStatus,
+ } from '@/types'
+ 
+ /**
+  * List query. staleTime 30s + refetchOnMount: 'always' để khi user quay lại
+  * tab vẫn fresh. Không polling — refresh button + auto invalidate sau mutation
+  * là đủ.
+  */
+ export const useVatRequests = (params: IVatRequestListParams) => {
+   return useQuery({
+     queryKey: [
+@@ -52,31 +51,39 @@ export const useUpdateVatRequest = () => {
+   return useMutation({
+     mutationFn: ({ slug, body }: { slug: string; body: IUpdateVatRequestBody }) =>
+       updateVatRequest(slug, body),
+     onSettled: () => {
+       qc.invalidateQueries({ queryKey: [...QUERYKEY.vatRequestsList] })
+     },
+     meta: { ignoreGlobalError: true },
+   })
+ }
+ 
+-/** Bước 5 mutation — sửa kế toán info. */
++/** Bước 5 mutation — cập nhật mã hoá đơn bằng cách gọi /status với status hiện tại.
++ *  accountantNote không còn hỗ trợ ở BE /status body — field đã drop khỏi UI. */
+ export const useUpdateAccountantInfo = () => {
+   const qc = useQueryClient()
+   return useMutation({
+     mutationFn: ({
+       slug,
+-      body,
++      currentStatus,
++      invoiceNumber,
+     }: {
+       slug: string
+-      body: IUpdateAccountantInfoBody
+-    }) => updateAccountantInfo(slug, body),
++      currentStatus: VatRequestStatus
++      invoiceNumber?: string
++    }) =>
++      updateVatStatus(slug, {
++        status: currentStatus,
++        invoiceNumber: invoiceNumber?.trim() || null,
++        note: null,
++      }),
+     onSettled: () => {
+       qc.invalidateQueries({ queryKey: [...QUERYKEY.vatRequestsList] })
+     },
+     meta: { ignoreGlobalError: true },
+   })
+ }
+ 
+ /** Bước 7 mutation — chuyển trạng thái. */
+ export const useUpdateVatStatus = () => {
+   const qc = useQueryClient()
+diff --git a/app/order-ui/src/lib/vat-status-transitions.ts b/app/order-ui/src/lib/vat-status-transitions.ts
+index 4cd655b..77ea8a8 100644
+--- a/app/order-ui/src/lib/vat-status-transitions.ts
++++ b/app/order-ui/src/lib/vat-status-transitions.ts
+@@ -1,17 +1,13 @@
+ import { VatRequestStatus } from '@/types'
+ 
+-const TERMINAL = new Set<VatRequestStatus>([
+-  VatRequestStatus.COMPLETED,
+-  VatRequestStatus.REJECTED,
+-])
+-
+-/** Mid workflow rules — see plan Global Constraints. */
++/**
++ * Free-transition rule: bất kỳ status nào cũng có thể chuyển sang bất kỳ
++ * status nào khác, ngoại trừ chính nó. Không còn state machine chặn rollback.
++ * Chỉ block same-status (prevent no-op click).
++ */
+ export function canTransition(
+   current: VatRequestStatus,
+   target: VatRequestStatus,
+ ): boolean {
+-  if (TERMINAL.has(current)) return false
+-  if (target === VatRequestStatus.PENDING) return false
+-  if (current === target) return false
+-  return true
++  return current !== target
+ }
+diff --git a/app/order-ui/src/locales/vi/vatAdmin.json b/app/order-ui/src/locales/vi/vatAdmin.json
+index ef04b65..b172213 100644
+--- a/app/order-ui/src/locales/vi/vatAdmin.json
++++ b/app/order-ui/src/locales/vi/vatAdmin.json
+@@ -39,29 +39,29 @@
+     "note": "Ghi chú",
+     "save": "Lưu thay đổi",
+     "saveSuccess": "Cập nhật thông tin khách hàng thành công",
+     "saveFailed": "Cập nhật thất bại",
+     "confirmTitle": "Cập nhật thông tin khách hàng",
+     "confirmDescription": "Xác nhận cập nhật thông tin khách hàng cho yêu cầu xuất hoá đơn VAT này?"
+   },
+   "accountantInfo": {
+     "title": "KẾ TOÁN INFO",
+     "invoiceNumber": "Số hoá đơn",
+-    "note": "Ghi chú nội bộ",
+     "save": "Lưu",
+     "confirmTitle": "Cập nhật thông tin kế toán",
+-    "confirmDescription": "Xác nhận cập nhật số hoá đơn / ghi chú nội bộ cho yêu cầu này?"
++    "confirmDescription": "Xác nhận cập nhật số hoá đơn cho yêu cầu này?"
+   },
+   "workflow": {
+     "title": "WORKFLOW STATUS",
+     "current": "Hiện tại",
+     "transitionTo": {
++      "PENDING": "Quay về chờ",
+       "PROCESSING": "Bắt đầu xử lý",
+       "COMPLETED": "Hoàn thành",
+       "REJECTED": "Từ chối"
+     }
+   },
+   "detail": {
+     "description": "Quản lý thông tin và trạng thái yêu cầu xuất hoá đơn VAT"
+   },
+   "tabs": {
+     "overview": "Tổng quan",
+@@ -73,25 +73,27 @@
+     "customer": "THÔNG TIN KHÁCH",
+     "accountant": "KẾ TOÁN",
+     "tableName": "Bàn",
+     "cashier": "Thu ngân",
+     "invoiceDate": "Thời gian đặt",
+     "requestedAt": "Ngày yêu cầu",
+     "companyName": "Công ty"
+   },
+   "transition": {
+     "title": {
++      "PENDING": "Quay về Đang chờ?",
+       "PROCESSING": "Bắt đầu xử lý?",
+       "COMPLETED": "Chuyển sang HOÀN THÀNH?",
+       "REJECTED": "Từ chối yêu cầu này?"
+     },
+     "description": {
++      "PENDING": "Đưa yêu cầu này về trạng thái chờ xử lý. Dùng khi cần làm lại từ đầu.",
+       "PROCESSING": "Đánh dấu đơn này đang được xử lý. Khách không nhận thông báo ở bước này.",
+       "COMPLETED": "Hoàn tất xuất hoá đơn. Nhập số hoá đơn thực tế đã phát hành để khách đối chiếu.",
+       "REJECTED": "Từ chối yêu cầu. Vui lòng nhập lý do — kế toán dùng để giải thích với khách."
+     },
+     "invoiceNumber": "Số hoá đơn (*)",
+     "invoiceHint": "Nếu đã lưu sẵn ở tab \"Kế toán\" thì hệ thống tự điền — chỉ cần kiểm tra rồi xác nhận.",
+     "invoiceRequired": "Vui lòng nhập số hoá đơn",
+     "rejectReason": "Lý do từ chối (*)",
+     "noteRequired": "Lý do từ chối tối thiểu 3 ký tự",
+     "emailNotice": "Hệ thống tạm thời chưa tự gửi email cho khách. Vui lòng liên hệ trực tiếp nếu cần."
+diff --git a/app/order-ui/src/schemas/vat-admin.schema.ts b/app/order-ui/src/schemas/vat-admin.schema.ts
+index a2a3348..abf04e4 100644
+--- a/app/order-ui/src/schemas/vat-admin.schema.ts
++++ b/app/order-ui/src/schemas/vat-admin.schema.ts
+@@ -7,34 +7,39 @@ export const vatUpdateCustomerSchema = z.object({
+   customerName: z.string().min(1).optional(),
+   taxCode: z.string().regex(taxCodeRegex).optional(),
+   address: z.string().min(1).optional(),
+   email: z.string().email().optional(),
+   companyName: z.string().optional(),
+   note: z.string().optional(),
+ })
+ 
+ export const vatUpdateAccountantSchema = z.object({
+   invoiceNumber: z.string().optional(),
+-  accountantNote: z.string().optional(),
+ })
+ 
+ export const vatStatusTransitionSchema = z.discriminatedUnion('status', [
++  z.object({
++    status: z.literal(VatRequestStatus.PENDING),
++    invoiceNumber: z.string().optional(),
++    note: z.string().optional(),
++  }),
+   z.object({
+     status: z.literal(VatRequestStatus.PROCESSING),
+     invoiceNumber: z.string().optional(),
+     note: z.string().optional(),
+   }),
+   z.object({
+     status: z.literal(VatRequestStatus.COMPLETED),
+     invoiceNumber: z.string().min(1),
+     note: z.string().optional(),
+   }),
+   z.object({
+     status: z.literal(VatRequestStatus.REJECTED),
+     invoiceNumber: z.string().optional(),
+     note: z.string().min(3),
+   }),
+ ])
+ 
+ export type TVatUpdateCustomer = z.infer<typeof vatUpdateCustomerSchema>
++/** Only invoiceNumber remains — accountantNote dropped (not in /status body). */
+ export type TVatUpdateAccountant = z.infer<typeof vatUpdateAccountantSchema>
+ export type TVatStatusTransition = z.infer<typeof vatStatusTransitionSchema>
+diff --git a/app/order-ui/src/tests/components/dialog/status-transition-confirm-dialog.test.tsx b/app/order-ui/src/tests/components/dialog/status-transition-confirm-dialog.test.tsx
+index 873d1f9..d3838ef 100644
+--- a/app/order-ui/src/tests/components/dialog/status-transition-confirm-dialog.test.tsx
++++ b/app/order-ui/src/tests/components/dialog/status-transition-confirm-dialog.test.tsx
+@@ -89,11 +89,61 @@ describe('StatusTransitionConfirmDialog', () => {
+       <StatusTransitionConfirmDialog
+         open={true}
+         vatRequest={sample}
+         targetStatus={VatRequestStatus.COMPLETED}
+         onClose={vi.fn()}
+         onConfirmed={vi.fn()}
+       />,
+     )
+     expect(screen.getByTestId('vat-transition-email-notice')).toBeInTheDocument()
+   })
++
++  it('renders PENDING target dialog without invoice or note inputs', () => {
++    mutate.mockReset()
++    render(
++      <StatusTransitionConfirmDialog
++        open={true}
++        vatRequest={sample}
++        targetStatus={VatRequestStatus.PENDING}
++        onClose={vi.fn()}
++        onConfirmed={vi.fn()}
++      />,
++    )
++    // No required fields for PENDING rollback
++    expect(screen.queryByTestId('vat-transition-invoice')).not.toBeInTheDocument()
++    expect(screen.queryByTestId('vat-transition-note')).not.toBeInTheDocument()
++    // Confirm button present
++    expect(screen.getByTestId('vat-transition-confirm')).toBeInTheDocument()
++  })
++
++  it('submits valid PENDING payload without required fields', async () => {
++    mutate.mockReset()
++    mutate.mockImplementation((_, callbacks) => {
++      callbacks?.onSuccess?.({
++        statusCode: 200,
++        message: '',
++        result: { slug: 'VAT-1', status: VatRequestStatus.PENDING },
++      })
++    })
++    render(
++      <StatusTransitionConfirmDialog
++        open={true}
++        vatRequest={sample}
++        targetStatus={VatRequestStatus.PENDING}
++        onClose={vi.fn()}
++        onConfirmed={vi.fn()}
++      />,
++    )
++    fireEvent.click(screen.getByTestId('vat-transition-confirm'))
++    await waitFor(() => {
++      expect(mutate).toHaveBeenCalledWith(
++        expect.objectContaining({
++          slug: 'VAT-1',
++          body: expect.objectContaining({
++            status: VatRequestStatus.PENDING,
++          }),
++        }),
++        expect.any(Object),
++      )
++    })
++  })
+ })
+diff --git a/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/accountant-info-section.test.tsx b/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/accountant-info-section.test.tsx
+index 0bc919b..a08b2c5 100644
+--- a/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/accountant-info-section.test.tsx
++++ b/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/accountant-info-section.test.tsx
+@@ -7,23 +7,22 @@ const mutate = vi.fn()
+ vi.mock('@/hooks/use-vat-admin', () => ({
+   useUpdateAccountantInfo: () => ({ mutate, isPending: false }),
+ }))
+ 
+ const sample = {
+   slug: 'VAT-1',
+   invoiceSlug: 'INV-1',
+   customerName: 'Co A',
+   taxCode: '0123456789',
+   email: 'a@x.com',
+-  status: VatRequestStatus.COMPLETED, // terminal — should still be editable
++  status: VatRequestStatus.COMPLETED, // terminal — should still be editable via accountantLocked gate (not isTerminal)
+   invoiceNumber: 'HD-001',
+-  accountantNote: 'note',
+   createdAt: '2026-06-26T10:00:00.000Z',
+ }
+ 
+ describe('AccountantInfoSection', () => {
+   it('is editable even when status is COMPLETED (terminal)', () => {
+     render(
+       <AccountantInfoSection
+         vatRequest={sample as never}
+         isLocked={false}
+         onUpdated={vi.fn()}
+@@ -47,17 +46,18 @@ describe('AccountantInfoSection', () => {
+     })
+     fireEvent.click(screen.getByTestId('vat-accountant-save'))
+     // Confirm dialog opens; mutation gated.
+     const confirmBtn = await screen.findByTestId('vat-confirm-update')
+     expect(mutate).not.toHaveBeenCalled()
+     fireEvent.click(confirmBtn)
+     await waitFor(() => {
+       expect(mutate).toHaveBeenCalledWith(
+         expect.objectContaining({
+           slug: 'VAT-1',
+-          body: expect.objectContaining({ invoiceNumber: 'HD-002' }),
++          currentStatus: VatRequestStatus.COMPLETED,
++          invoiceNumber: 'HD-002',
+         }),
+         expect.any(Object),
+       )
+     })
+   })
+ })
+diff --git a/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/vat-request-detail-sheet.test.tsx b/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/vat-request-detail-sheet.test.tsx
+index 01dc71c..00d4c13 100644
+--- a/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/vat-request-detail-sheet.test.tsx
++++ b/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/vat-request-detail-sheet.test.tsx
+@@ -60,20 +60,34 @@ describe('VatRequestDetailSheet', () => {
+     render(<VatRequestDetailSheet vatRequest={sample as never} onClose={vi.fn()} />, {
+       wrapper,
+     })
+     expect(screen.getByTestId('vat-tab-overview')).toBeInTheDocument()
+     expect(screen.getByTestId('vat-tab-customer')).toBeInTheDocument()
+     expect(screen.getByTestId('vat-tab-accountant')).toBeInTheDocument()
+     // Default tab: overview content visible.
+     expect(screen.getByTestId('vat-overview-tab')).toBeInTheDocument()
+   })
+ 
+-  it('renders footer with workflow transition buttons + close', () => {
++  it('renders footer with workflow transition buttons + close (from PENDING)', () => {
+     render(<VatRequestDetailSheet vatRequest={sample as never} onClose={vi.fn()} />, {
+       wrapper,
+     })
+     expect(screen.getByTestId('vat-detail-footer')).toBeInTheDocument()
++    // PENDING button hidden (same-status block); others visible
++    expect(screen.queryByTestId('vat-transition-PENDING')).not.toBeInTheDocument()
+     expect(screen.getByTestId('vat-transition-PROCESSING')).toBeInTheDocument()
+     expect(screen.getByTestId('vat-transition-COMPLETED')).toBeInTheDocument()
+     expect(screen.getByTestId('vat-transition-REJECTED')).toBeInTheDocument()
+   })
++
++  it('renders transition buttons even from COMPLETED (terminal, free transitions)', () => {
++    const terminalSample = { ...sample, status: VatRequestStatus.COMPLETED }
++    render(<VatRequestDetailSheet vatRequest={terminalSample as never} onClose={vi.fn()} />, {
++      wrapper,
++    })
++    expect(screen.getByTestId('vat-transition-PENDING')).toBeInTheDocument()
++    expect(screen.getByTestId('vat-transition-PROCESSING')).toBeInTheDocument()
++    // COMPLETED button hidden (same-status block)
++    expect(screen.queryByTestId('vat-transition-COMPLETED')).not.toBeInTheDocument()
++    expect(screen.getByTestId('vat-transition-REJECTED')).toBeInTheDocument()
++  })
+ })
+diff --git a/app/order-ui/src/tests/hooks/use-vat-admin.test.tsx b/app/order-ui/src/tests/hooks/use-vat-admin.test.tsx
+index 2f5f4f4..122a3df 100644
+--- a/app/order-ui/src/tests/hooks/use-vat-admin.test.tsx
++++ b/app/order-ui/src/tests/hooks/use-vat-admin.test.tsx
+@@ -1,22 +1,24 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest'
+ import { renderHook, waitFor } from '@testing-library/react'
+ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+ import type { ReactNode } from 'react'
+ 
+ import * as api from '@/api/vat-admin'
+ import {
+   useVatRequests,
+   useUpdateVatRequest,
++  useUpdateAccountantInfo,
+   useHasVatPermission,
+ } from '@/hooks/use-vat-admin'
+ import { useAuthStore } from '@/stores'
++import { VatRequestStatus } from '@/types'
+ 
+ vi.mock('@/api/vat-admin')
+ vi.mock('@/stores', async () => {
+   const actual = await vi.importActual<typeof import('@/stores')>('@/stores')
+   return { ...actual, useAuthStore: vi.fn() }
+ })
+ 
+ function wrapper({ children }: { children: ReactNode }) {
+   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+@@ -48,20 +50,61 @@ describe('useUpdateVatRequest', () => {
+       message: '',
+       result: { slug: 'VAT-1' },
+     } as never)
+     const { result } = renderHook(() => useUpdateVatRequest(), { wrapper })
+     result.current.mutate({ slug: 'VAT-1', body: { email: 'x@y.z' } })
+     await waitFor(() => expect(result.current.isSuccess).toBe(true))
+     expect(api.updateVatRequest).toHaveBeenCalledWith('VAT-1', { email: 'x@y.z' })
+   })
+ })
+ 
++describe('useUpdateAccountantInfo', () => {
++  it('calls updateVatStatus (not updateAccountantInfo) with currentStatus + invoiceNumber', async () => {
++    vi.mocked(api.updateVatStatus).mockResolvedValue({
++      statusCode: 200,
++      message: '',
++      result: { slug: 'VAT-1' },
++    } as never)
++    const { result } = renderHook(() => useUpdateAccountantInfo(), { wrapper })
++    result.current.mutate({
++      slug: 'VAT-1',
++      currentStatus: VatRequestStatus.PROCESSING,
++      invoiceNumber: 'HD-002',
++    })
++    await waitFor(() => expect(result.current.isSuccess).toBe(true))
++    expect(api.updateVatStatus).toHaveBeenCalledWith('VAT-1', {
++      status: VatRequestStatus.PROCESSING,
++      invoiceNumber: 'HD-002',
++      note: null,
++    })
++  })
++
++  it('sends null invoiceNumber when not provided', async () => {
++    vi.mocked(api.updateVatStatus).mockResolvedValue({
++      statusCode: 200,
++      message: '',
++      result: { slug: 'VAT-2' },
++    } as never)
++    const { result } = renderHook(() => useUpdateAccountantInfo(), { wrapper })
++    result.current.mutate({
++      slug: 'VAT-2',
++      currentStatus: VatRequestStatus.PENDING,
++    })
++    await waitFor(() => expect(result.current.isSuccess).toBe(true))
++    expect(api.updateVatStatus).toHaveBeenCalledWith('VAT-2', {
++      status: VatRequestStatus.PENDING,
++      invoiceNumber: null,
++      note: null,
++    })
++  })
++})
++
+ describe('useHasVatPermission', () => {
+   it('returns all-false when token absent', () => {
+     vi.mocked(useAuthStore).mockReturnValue({ token: null } as never)
+     const { result } = renderHook(() => useHasVatPermission(), { wrapper })
+     expect(result.current).toEqual({
+       canView: false,
+       canEdit: false,
+       canEditAccountant: false,
+       canUpdateStatus: false,
+     })
+diff --git a/app/order-ui/src/tests/schemas/vat-admin.test.ts b/app/order-ui/src/tests/schemas/vat-admin.test.ts
+index 5eba589..0fa5703 100644
+--- a/app/order-ui/src/tests/schemas/vat-admin.test.ts
++++ b/app/order-ui/src/tests/schemas/vat-admin.test.ts
+@@ -30,27 +30,38 @@ describe('vatUpdateCustomerSchema', () => {
+     const r = vatUpdateCustomerSchema.safeParse({ email: 'not-an-email' })
+     expect(r.success).toBe(false)
+   })
+ })
+ 
+ describe('vatUpdateAccountantSchema', () => {
+   it('accepts empty object', () => {
+     expect(vatUpdateAccountantSchema.safeParse({}).success).toBe(true)
+   })
+ 
+-  it('accepts both fields populated', () => {
++  it('accepts invoiceNumber field', () => {
+     const r = vatUpdateAccountantSchema.safeParse({
+       invoiceNumber: 'HD-2026-001',
+-      accountantNote: 'verified',
+     })
+     expect(r.success).toBe(true)
+   })
++
++  it('does not include accountantNote field', () => {
++    // accountantNote is no longer part of the schema — ignored/stripped by Zod
++    const r = vatUpdateAccountantSchema.safeParse({
++      invoiceNumber: 'HD-2026-001',
++    })
++    expect(r.success).toBe(true)
++    // accountantNote should not be in parsed output
++    if (r.success) {
++      expect('accountantNote' in r.data).toBe(false)
++    }
++  })
+ })
+ 
+ describe('vatStatusTransitionSchema', () => {
+   it('accepts COMPLETED with invoiceNumber', () => {
+     const r = vatStatusTransitionSchema.safeParse({
+       status: VatRequestStatus.COMPLETED,
+       invoiceNumber: 'HD-001',
+     })
+     expect(r.success).toBe(true)
+   })
+@@ -85,17 +96,26 @@ describe('vatStatusTransitionSchema', () => {
+     expect(r.success).toBe(false)
+   })
+ 
+   it('accepts PROCESSING with no required fields', () => {
+     const r = vatStatusTransitionSchema.safeParse({
+       status: VatRequestStatus.PROCESSING,
+     })
+     expect(r.success).toBe(true)
+   })
+ 
+-  it('rejects PENDING as transition target (no revert)', () => {
++  it('accepts PENDING as transition target (free rollback allowed)', () => {
+     const r = vatStatusTransitionSchema.safeParse({
+       status: VatRequestStatus.PENDING,
+     })
+-    expect(r.success).toBe(false)
++    expect(r.success).toBe(true)
++  })
++
++  it('accepts PENDING with optional invoiceNumber and note', () => {
++    const r = vatStatusTransitionSchema.safeParse({
++      status: VatRequestStatus.PENDING,
++      invoiceNumber: 'HD-001',
++      note: 'rollback reason',
++    })
++    expect(r.success).toBe(true)
+   })
+ })
+diff --git a/app/order-ui/src/types/vat.type.ts b/app/order-ui/src/types/vat.type.ts
+index b67318b..ba94b4c 100644
+--- a/app/order-ui/src/types/vat.type.ts
++++ b/app/order-ui/src/types/vat.type.ts
+@@ -60,21 +60,20 @@ export interface IVatInvoiceContext {
+ 
+ export interface IVatRequestListItem {
+   slug: string
+   customerName: string
+   taxCode: string
+   email: string
+   address?: string
+   companyName?: string
+   note?: string
+   invoiceNumber?: string | null
+-  accountantNote?: string | null
+   status: VatRequestStatus
+   createdAt: string
+   updatedAt?: string
+   invoiceId?: string
+   invoice?: IVatInvoiceContext
+ }
+ 
+ export interface IVatRequestListParams {
+   /** BE chỉ accept 1 status per request (không support multi-status filter). */
+   status?: VatRequestStatus
+@@ -94,22 +93,17 @@ export interface IVatRequestListResponse {
+ 
+ export interface IUpdateVatRequestBody {
+   customerName?: string
+   taxCode?: string
+   address?: string
+   email?: string
+   companyName?: string
+   note?: string
+ }
+ 
+-export interface IUpdateAccountantInfoBody {
+-  invoiceNumber?: string
+-  accountantNote?: string
+-}
+-
+ export interface IUpdateVatStatusBody {
+   status: VatRequestStatus
+   /** Null khi chưa có (BE từ chối empty string ""). */
+   invoiceNumber?: string | null
+   /** Null khi không có note. */
+   note?: string | null
+ }

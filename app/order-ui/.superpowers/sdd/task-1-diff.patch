@@ -1,0 +1,188 @@
+diff --git a/app/order-ui/src/app/public-vat-request/page.tsx b/app/order-ui/src/app/public-vat-request/page.tsx
+index 064ad73..e059b02 100644
+--- a/app/order-ui/src/app/public-vat-request/page.tsx
++++ b/app/order-ui/src/app/public-vat-request/page.tsx
+@@ -8,10 +8,9 @@ import {
+   AlertCircle,
+   CheckCircle2,
+   Loader2,
+-  Receipt,
+ } from 'lucide-react'
+ 
+-import { Button } from '@/components/ui'
++import { TerminalLogo } from '@/assets/images'
+ import { ConfirmUpdateVatRequestDialog } from '@/components/app/dialog'
+ import {
+   useSubmitVatRequest,
+@@ -46,19 +45,69 @@ export default function PublicVatRequestPage() {
+   const remoteSubmitted = status.data?.status === 'SUBMITTED'
+ 
+   return (
+-    <div className="min-h-screen bg-gradient-to-b from-pos-gold/5 to-background px-4 py-8">
++    <div className="brick-wall relative min-h-screen overflow-hidden px-4 py-8 md:py-12">
+       <Helmet>
+         <title>The Terminal — {t('vat.publicTitle', 'Yêu cầu xuất hoá đơn VAT')}</title>
+       </Helmet>
+ 
+-      <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+-        <header className="flex flex-col items-center gap-2 py-4 text-center">
+-          <Receipt className="h-10 w-10 text-pos-gold" />
+-          <h1 className="text-2xl font-bold text-gray-900">The Terminal</h1>
+-          <p className="text-sm text-muted-foreground">
+-            {t('vat.publicTagline', 'Yêu cầu xuất hoá đơn VAT')}
+-          </p>
+-        </header>
++      {/* Dark overlay — same gradient as landing hero */}
++      <div
++        className="absolute inset-0"
++        style={{
++          background:
++            'linear-gradient(180deg, rgba(20,12,4,.78) 0%, rgba(15,10,4,.82) 60%, rgba(8,5,2,.92) 100%)',
++        }}
++      />
++
++      {/* Rising steam */}
++      <div className="steam" style={{ left: '12%' }} />
++      <div className="steam" style={{ left: '52%', animationDelay: '-2s' }} />
++      <div className="steam" style={{ left: '85%', animationDelay: '-4s' }} />
++
++      <div className="relative z-10 mx-auto flex w-full max-w-md flex-col gap-5">
++        {/* ── SIGNBOARD HEADER ── */}
++        <div className="signboard relative w-full px-6 py-7">
++          <span className="rivet" style={{ top: '8px', left: '8px' }} />
++          <span className="rivet" style={{ top: '8px', right: '8px' }} />
++          <span className="rivet" style={{ bottom: '8px', left: '8px' }} />
++          <span className="rivet" style={{ bottom: '8px', right: '8px' }} />
++
++          <div className="signboard-inner text-center">
++            <img
++              src={TerminalLogo}
++              alt="The Terminal"
++              className="mx-auto mb-4 h-16 w-16 rounded-full object-cover ring-1 ring-landing-brass/30 md:h-20 md:w-20"
++            />
++
++            {/* Eyebrow divider */}
++            <div className="mb-3 flex items-center justify-center gap-3">
++              <span
++                className="h-px w-8 md:w-12"
++                style={{ background: 'linear-gradient(90deg, transparent, #c88d2b 70%, #ffe9a3)' }}
++              />
++              <span className="text-grad-accent text-[10px] font-medium tracking-[.4em] md:text-[11px]">
++                {t('vat.publicEyebrow', 'HOÁ ĐƠN VAT')}
++              </span>
++              <span
++                className="h-px w-8 md:w-12"
++                style={{ background: 'linear-gradient(90deg, #ffe9a3, #c88d2b 30%, transparent)' }}
++              />
++            </div>
++
++            <h1
++              className="text-grad-primary whitespace-nowrap font-black uppercase leading-[.9] tracking-[.04em]"
++              style={{ fontSize: 'clamp(1.5rem, 7vw, 2.75rem)' }}
++            >
++              The Terminal
++            </h1>
++
++            <div className="brand-divider mx-auto mt-4" style={{ maxWidth: '180px' }} />
++
++            <p className="mt-4 text-[11px] font-medium uppercase tracking-[.3em] text-landing-brass-light/85 md:text-xs">
++              {t('vat.publicTagline', 'Yêu cầu xuất hoá đơn VAT')}
++            </p>
++          </div>
++        </div>
+ 
+         {isLoading && <LoadingCard />}
+ 
+@@ -133,29 +182,29 @@ export default function PublicVatRequestPage() {
+ 
+ function LoadingCard() {
+   return (
+-    <div className="flex items-center justify-center rounded-lg border bg-white py-10">
+-      <Loader2 className="h-6 w-6 animate-spin text-pos-gold" />
++    <div className="flex items-center justify-center rounded-md paper-card py-10">
++      <Loader2 className="h-6 w-6 animate-spin text-landing-brass" />
+     </div>
+   )
+ }
+ 
+ function ErrorCard({ message }: { message: string }) {
+   return (
+-    <div className="flex flex-col items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-6 text-center">
++    <div className="paper-card flex flex-col items-center gap-3 rounded-md p-6 text-center">
+       <AlertCircle className="h-10 w-10 text-destructive" />
+-      <p className="text-sm text-destructive">{message}</p>
++      <p className="text-sm font-medium text-landing-rust-deep">{message}</p>
+     </div>
+   )
+ }
+ 
+ function SuccessCard({ title, body }: { title: string; body: string }) {
+   return (
+-    <div className="flex flex-col items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-6 text-center">
++    <div className="paper-card flex flex-col items-center gap-3 rounded-md p-6 text-center">
+       <div className="rounded-full bg-emerald-100 p-3">
+         <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+       </div>
+-      <h3 className="text-base font-semibold text-emerald-900">{title}</h3>
+-      <p className="text-sm text-emerald-800">{body}</p>
++      <h3 className="text-base font-semibold text-landing-ink">{title}</h3>
++      <p className="text-sm text-landing-ink/75">{body}</p>
+     </div>
+   )
+ }
+@@ -182,7 +231,7 @@ function PublicForm({
+   return (
+     <form
+       onSubmit={handleSubmit(onRequestSubmit)}
+-      className="space-y-4 rounded-lg border bg-white p-5 shadow-sm"
++      className="paper-card rounded-md p-5 space-y-4 md:p-6"
+       noValidate
+     >
+       <Field
+@@ -262,7 +311,7 @@ function PublicForm({
+         />
+       </Field>
+ 
+-      <div className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-xs text-amber-800">
++      <div className="flex items-start gap-2 rounded-md border border-amber-700/30 bg-amber-50/80 p-3 text-xs text-amber-900">
+         <span className="text-base">⚠</span>
+         <span>
+           {t(
+@@ -272,16 +321,20 @@ function PublicForm({
+         </span>
+       </div>
+ 
+-      <Button type="submit" disabled={isPending} className="w-full">
++      <button
++        type="submit"
++        disabled={isPending}
++        className="btn-brass w-full px-6 py-3 text-xs disabled:cursor-not-allowed disabled:opacity-60"
++      >
+         {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+         {t('vat.submit', 'Gửi yêu cầu')}
+-      </Button>
++      </button>
+     </form>
+   )
+ }
+ 
+ const inputClass =
+-  'w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-pos-gold focus:outline-none focus:ring-1 focus:ring-pos-gold'
++  'w-full rounded-md border border-amber-900/30 bg-white/70 px-3 py-2 text-sm text-landing-ink placeholder:text-landing-ink/40 focus:border-landing-brass focus:outline-none focus:ring-1 focus:ring-landing-brass'
+ 
+ function Field({
+   label,
+@@ -299,11 +352,11 @@ function Field({
+   const { t } = useTranslation('menu')
+   return (
+     <div>
+-      <label className="mb-1 flex items-center gap-1 text-sm font-medium">
++      <label className="mb-1 flex items-center gap-1 text-sm font-semibold text-landing-ink/85">
+         {label}
+         {required && <span className="text-red-500">*</span>}
+         {hint && (
+-          <span className="ml-1 text-xs font-normal text-muted-foreground">
++          <span className="ml-1 text-xs font-normal text-landing-ink/55">
+             ({hint})
+           </span>
+         )}

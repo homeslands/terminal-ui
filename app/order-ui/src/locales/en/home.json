@@ -1,0 +1,105 @@
+{
+  "home": {
+    "aboutUsDescription": "An intimate fine-dining restaurant serving seasonal European cuisine. Reserve your table with us.",
+    "bestSeller": "Best seller",
+    "contactUs": "Contact us",
+    "description": "This is the home page",
+    "exploreMenu": "Featured products",
+    "fanpage": "Facebook",
+    "homeDescription": "THE TERMINAL is an intimate fine-dining restaurant set inside a restored freight house at the end of an old line — a seasonal European menu, candle-lit evenings, and a kitchen devoted to craft over speed.",
+    "homeDescription2": "Every detail — from salvaged oak and lime-washed brick to the single brass lamp from the original station office — is composed with intention, so each course arrives like a postcard and every glass pours like a ticket to somewhere finer.",
+    "learnAboutUs": "Learn about us",
+    "learnMore": "Learn more",
+    "menu": "Menu",
+    "newProduct": "New product",
+    "title": "Home",
+    "topPromotion": "Top promotion",
+    "newsSection": {
+      "title": "News & Event"
+    },
+    "videoSection": {
+      "title": "HOW TO REGISTER FOR MEMBER"
+    },
+    "viewMenu": "View more MENU",
+    "viewMore": "View more",
+    "highlightMenu": {
+      "starters": "Starters",
+      "mainCourses": "Main Courses",
+      "desserts": "Desserts",
+      "cheers": "Cheers",
+      "combo": "Combo"
+    },
+    "hero": {
+      "established": "EST · 2026",
+      "title": "THE TERMINAL",
+      "subtitle": "Fine Dining · European Kitchen",
+      "exploreMenu": "Explore the Menu",
+      "reserve": "Reserve a Table",
+      "scroll": "Scroll"
+    },
+    "about": {
+      "eyebrow": "Track 04 · All Aboard",
+      "title": "Built inside an old freight house.",
+      "quote": "The journey is the meal, and the meal is the journey.",
+      "author": "Chef M. Kovács",
+      "yearsValue": "02",
+      "yearsLabel": "Years of Service",
+      "dishesValue": "21",
+      "dishesLabel": "Dishes on the Bill",
+      "seatsValue": "48",
+      "seatsLabel": "Seats in the Room"
+    },
+    "billOfFare": "Bill of Fare",
+    "menuTitle": "Menu",
+    "menuSubtitle": "A seasonal European menu, plated with intent — explore our signature courses.",
+    "location": {
+      "eyebrow": "Departure Board",
+      "title": "Find the Terminal",
+      "subtitle": "Three stops along the line — same hours, same kitchen, same long Sunday.",
+      "branch": "Branch",
+      "hoursEyebrow": "Departure Board",
+      "hoursTitle": "Hours of Operation",
+      "hotlineLabel": "Hotline",
+      "hotline": "1900 6403",
+      "emailLabel": "Email",
+      "email": "reservations@theterminal.dining",
+      "day": "Day",
+      "serviceWindow": "Service Window",
+      "hours": {
+        "monday": "10:30 — 22:00",
+        "tuesday": "10:30 — 22:00",
+        "wednesday": "10:30 — 22:00",
+        "thursday": "10:30 — 22:00",
+        "friday": "10:30 — 23:00",
+        "saturday": "10:30 — 23:00",
+        "sunday": "10:30 — 22:00"
+      },
+      "branches": {
+        "villa": {
+          "name": "The Villa",
+          "address": "290 Điện Biên Phủ, P. Xuân Hoà, TP.HCM",
+          "note": "(ngã ba Lê Ngô Cát & Điện Biên Phủ)"
+        },
+        "docLap": {
+          "name": "Độc Lập",
+          "address": "106 Nguyễn Thị Minh Khai, P. Xuân Hoà, TP.HCM",
+          "note": "(ngay góc Nam Kỳ Khởi Nghĩa)"
+        },
+        "diamond": {
+          "name": "Diamond Plaza",
+          "address": "Tầng 5, Diamond Plaza, 34 Lê Duẩn, P. Sài Gòn, TP.HCM",
+          "note": "(rooftop terrace · skyline view)"
+        }
+      },
+      "days": {
+        "monday": "Monday",
+        "tuesday": "Tuesday",
+        "wednesday": "Wednesday",
+        "thursday": "Thursday",
+        "friday": "Friday",
+        "saturday": "Saturday",
+        "sunday": "Sunday"
+      }
+    }
+  }
+}

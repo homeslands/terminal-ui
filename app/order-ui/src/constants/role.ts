@@ -1,0 +1,64 @@
+import { ROUTE } from './route'
+
+export enum Role {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
+  STAFF = 'STAFF',
+  CASHIER = 'CASHIER',
+  TELESALE = 'TELESALE',
+  CHEF = 'CHEF',
+  CUSTOMER = 'CUSTOMER',
+}
+
+// Định nghĩa quyền truy cập cho từng route
+export const RoutePermissions: Record<string, Role[]> = {
+  // Admin routes
+  [ROUTE.HOME]: [Role.SUPER_ADMIN, Role.ADMIN],
+  [ROUTE.STAFF_DELIVERY_MANAGEMENT]: [Role.SUPER_ADMIN, Role.ADMIN],
+  [ROUTE.STAFF_ORDER_MANAGEMENT]: [Role.SUPER_ADMIN, Role.ADMIN],
+  [ROUTE.STAFF_USER_MANAGEMENT]: [Role.SUPER_ADMIN, Role.ADMIN],
+  [ROUTE.STAFF_LOG_MANAGEMENT]: [Role.SUPER_ADMIN, Role.ADMIN],
+  [ROUTE.STAFF_BANK_CONFIG]: [Role.SUPER_ADMIN, Role.ADMIN],
+
+  // Manager routes
+  [ROUTE.STAFF_DELIVERY_MANAGEMENT]: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER],
+  [ROUTE.STAFF_ORDER_MANAGEMENT]: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.CASHIER],
+  [ROUTE.STAFF_PRODUCT_MANAGEMENT]: [
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.MANAGER,
+  ],
+  [ROUTE.STAFF_MENU_AND_PRODUCT_MANAGEMENT]: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER],
+
+  // Staff routes
+  [ROUTE.STAFF_CHECKOUT_ORDER]: [
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.MANAGER,
+    Role.STAFF,
+  ],
+  [ROUTE.STAFF_TABLE_MANAGEMENT]: [
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.MANAGER,
+    Role.STAFF,
+  ],
+
+  // Admin table-based ordering (đặt hộ) — STAFF không include vì họ dùng /staff/table/*
+  [ROUTE.STAFF_MENU]: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.CASHIER],
+  [ROUTE.SYSTEM_TABLE_PAYMENT]: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGER, Role.CASHIER],
+
+  // Customer routes
+  // [ROUTE.CLIENT_MENU]: [Role.CUSTOMER],
+  [ROUTE.CLIENT_CART]: [Role.CUSTOMER],
+  [ROUTE.CLIENT_CHECKOUT_ORDER]: [Role.CUSTOMER],
+
+  // Chef routes
+  [ROUTE.STAFF_DELIVERY_MANAGEMENT]: [
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.MANAGER,
+    Role.CHEF,
+  ],
+}

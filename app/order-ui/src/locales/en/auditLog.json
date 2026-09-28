@@ -1,0 +1,66 @@
+{
+  "auditLog": {
+    "title": "Audit history",
+    "tab": { "viewer": "Change history", "config": "Tracking config" },
+    "col": {
+      "createdAt": "Time",
+      "user": "Performed by",
+      "event": "Event",
+      "entity": "Entity",
+      "summary": "Change summary",
+      "action": "Details"
+    },
+    "event": { "Create": "Created", "Update": "Updated", "Delete": "Deleted" },
+    "systemActor": "Staff",
+    "entityLabels": {
+      "Order": "Order",
+      "User": "User",
+      "Voucher": "Voucher",
+      "Product": "Product",
+      "Menu": "Menu",
+      "Promotion": "Promotion",
+      "GiftCard": "Gift Card",
+      "Branch": "Branch",
+      "Table": "Table"
+    },
+    "summary": {
+      "created": "Created",
+      "deleted": "Deleted",
+      "updateWithExtra": "{{head}} (+{{count}} more)"
+    },
+    "filter": {
+      "user": "User",
+      "userPlaceholder": "Search by phone",
+      "userEmpty": "No user found",
+      "userLoading": "Loading users...",
+      "entity": "Entity",
+      "entityAll": "All",
+      "entityDisabled": "(disabled)",
+      "event": "Event",
+      "date": "Date range",
+      "reset": "Reset filters"
+    },
+    "sheet": {
+      "title": "Change detail",
+      "before": "Before",
+      "after": "After",
+      "copyRaw": "Copy JSON",
+      "noChange": "No changes",
+      "close": "Close"
+    },
+    "config": {
+      "colEntity": "Entity",
+      "colEnabled": "Enabled",
+      "statusActive": "Tracking",
+      "statusPaused": "Paused",
+      "disableTitle": "Disable audit tracking?",
+      "disableBody": "Disabling will stop recording changes for {{entity}}. Existing logs are kept. Continue?",
+      "disableConfirm": "Disable audit",
+      "cancel": "Cancel"
+    },
+    "empty": {
+      "viewer": "No log matches the filter.",
+      "config": "No config found. Try reloading."
+    }
+  }
+}

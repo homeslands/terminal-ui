@@ -1,0 +1,725 @@
+import { useEffect } from 'react'
+import _ from 'lodash'
+// import Joyride from 'react-joyride';
+import { CircleAlert, ShoppingCartIcon, Trash2 } from 'lucide-react'
+import { Helmet } from 'react-helmet'
+import { useTranslation } from 'react-i18next'
+import { NavLink } from 'react-router-dom'
+
+import { QuantitySelector } from '@/components/app/button'
+import { useBranchStore, useOrderFlowStore } from '@/stores'
+import { CartNoteInput } from '@/components/app/input'
+import {
+  CreateOrderDialog,
+  DeleteAllCartDialog,
+  DeleteCartItemDialog,
+} from '@/components/app/dialog'
+import { APPLICABILITY_RULE, ROUTE, VOUCHER_TYPE, publicFileURL, PHONE_NUMBER_REGEX } from '@/constants'
+import { Badge, Button } from '@/components/ui'
+import { OrderTypeSelect, PickupTimeSelect, ProductVariantSelect, TableInCartSelect } from '@/components/app/select'
+import { VoucherListSheet } from '@/components/app/sheet'
+import { formatCurrency, calculateCartTotals, showErrorToast, calculateCartItemDisplay, useCalculateDeliveryFee, parseKm, showErrorToastMessage } from '@/utils'
+import { OrderNoteInput } from '@/components/app/input'
+import {ProductImage} from '@/assets/images'
+import { OrderTypeEnum } from '@/types'
+import { useIsMobile } from '@/hooks'
+import { cn } from '@/lib'
+import { MapAddressSelector } from './components'
+
+export default function ClientCartPage() {
+  const { t } = useTranslation('menu')
+  const { t: tVoucher } = useTranslation('voucher')
+  const { t: tHelmet } = useTranslation('helmet')
+  const { branch } = useBranchStore()
+  // const [runJoyride, setRunJoyride] = useState(false)
+  const isMobile = useIsMobile()
+  const { removeVoucher, getCartItems, addOrderingProductVariant } = useOrderFlowStore()
+
+  const currentCartItems = getCartItems()
+  const hasCustomPriceItems = currentCartItems?.orderItems.some((i) => i.isCustomPrice) ?? false
+  const hasUnpricedCustomItems = (currentCartItems?.orderItems ?? []).some((i) => i.isCustomPrice === true && !(i.customPrice != null && i.customPrice > 0))
+  const voucherSlug = currentCartItems?.voucher?.slug
+  const voucherMaxItems = currentCartItems?.voucher?.maxItems || 0
+  const cartItemQuantity =
+    currentCartItems?.orderItems?.reduce((total, item) => total + (item.quantity || 0), 0) || 0
+
+  const displayItems = calculateCartItemDisplay(
+    currentCartItems,
+    currentCartItems?.voucher || null
+  )
+
+  const cartTotals = calculateCartTotals(displayItems, currentCartItems?.voucher || null)
+
+  const deliveryFee = useCalculateDeliveryFee(parseKm(currentCartItems?.deliveryDistance) || 0, branch?.slug || '')
+
+  const handleChangeVariant = (id: string) => {
+    addOrderingProductVariant(id)
+  }
+
+  // Kiểm tra voucher validity cho SAME_PRICE_PRODUCT
+  useEffect(() => {
+    if (currentCartItems?.voucher && currentCartItems.voucher.type === VOUCHER_TYPE.SAME_PRICE_PRODUCT) {
+      const voucherProductSlugs = currentCartItems.voucher.voucherProducts
+        ?.map(vp => vp.product?.slug)
+        .filter((s): s is string => !!s) || []
+      const hasValidProducts = currentCartItems.orderItems.some(item => voucherProductSlugs.includes(item.slug))
+
+      if (!hasValidProducts) {
+        showErrorToast(143422)
+        removeVoucher()
+      }
+    }
+  }, [currentCartItems, removeVoucher])
+
+  // use useEffect to check if subtotal is less than minOrderValue of voucher
+  useEffect(() => {
+    if (currentCartItems && currentCartItems.voucher) {
+      const { voucher, orderItems } = currentCartItems
+
+      // Nếu không phải SAME_PRICE_PRODUCT thì mới cần check
+      const shouldCheckMinOrderValue = voucher.type !== VOUCHER_TYPE.SAME_PRICE_PRODUCT
+
+      if (shouldCheckMinOrderValue) {
+        // Tính subtotal trực tiếp từ orderItems sau promotion, không sử dụng calculations để tránh circular dependency
+        const subtotalAfterPromotion = orderItems.reduce((total, item) => {
+          const original = item?.originalPrice
+          const afterPromotion = (original || 0) - (item.promotionDiscount || 0)
+          return total + afterPromotion * item.quantity
+        }, 0)
+
+        if (subtotalAfterPromotion < (voucher.minOrderValue || 0)) {
+          removeVoucher()
+          showErrorToast(1004)
+        }
+      }
+    }
+  }, [currentCartItems, removeVoucher])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    const timer = setTimeout(() => {
+      // setRunJoyride(true)
+    }, 300) // delay nhẹ để scroll xong rồi mới chạy joyride
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Check if the total quantity of products in the cart exceeds the voucher's maxItems
+  useEffect(() => {
+    if (!voucherSlug || !voucherMaxItems) return
+    if (cartItemQuantity > voucherMaxItems) {
+      removeVoucher()
+      showErrorToastMessage('toast.voucherMaxItemsExceeded')
+    }
+  }, [
+    voucherSlug,
+    voucherMaxItems,
+    cartItemQuantity,
+    removeVoucher,
+  ])
+
+  if (_.isEmpty(currentCartItems?.orderItems)) {
+    return (
+      <div className="container sm:py-20 lg:h-[60vh]">
+        <div className="flex flex-col gap-5 justify-center items-center">
+          <ShoppingCartIcon className="w-32 h-32 text-primary" />
+          <p className="text-center text-[13px]">{t('order.noOrders')}</p>
+          <NavLink to={ROUTE.CLIENT_MENU}>
+            <Button variant="default">{t('order.backToMenu')}</Button>
+          </NavLink>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`container py-10`}>
+      <Helmet>
+        <meta charSet="utf-8" />
+        <title>{tHelmet('helmet.cart.title')}</title>
+        <meta name="description" content={tHelmet('helmet.cart.title')} />
+      </Helmet>
+      {/* Order type selection */}
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <div className="w-full">
+          <div className="flex gap-1 items-center pb-4">
+            <CircleAlert size={14} className="text-destructive dark:text-red-500" />
+            <span className="text-xs italic text-destructive dark:text-red-500">
+              {t('order.selectTableNote')}
+            </span>
+          </div>
+          {currentCartItems?.type === OrderTypeEnum.DELIVERY ? (
+            // Delivery layout
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+              <div className="joyride-step-1 sm:col-span-4">
+                <OrderTypeSelect />
+              </div>
+              <DeleteAllCartDialog />
+            </div>
+          ) : (
+            // Take-out / Dine-in layout
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="joyride-step-1">
+                <OrderTypeSelect />
+              </div>
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-5">
+                <div className="joyride-step-2 sm:col-span-4">
+                  {currentCartItems?.type === OrderTypeEnum.TAKE_OUT ? (
+                    <PickupTimeSelect />
+                  ) : (
+                    <TableInCartSelect />
+                  )}
+                </div>
+                <DeleteAllCartDialog />
+              </div>
+            </div>
+          )}
+
+          {currentCartItems?.type === OrderTypeEnum.DELIVERY && (
+            <div className='mt-2'>
+              <MapAddressSelector />
+            </div>
+          )}
+
+          {/* Table list order items */}
+          {!isMobile ? (
+            <div className="my-4">
+              <div className="grid grid-cols-8 px-4 py-3 mb-4 text-sm font-thin rounded-md bg-muted-foreground/10">
+                <span className="col-span-3">{t('order.product')}</span>
+                <span className="col-span-2 text-center">
+                  {t('order.quantity')}
+                </span>
+                <span className="col-span-2 text-center">
+                  {t('order.grandTotal')}
+                </span>
+                <span className="flex col-span-1 justify-center">
+                  <Trash2 size={18} />
+                </span>
+              </div>
+              <div className="flex flex-col gap-3 mb-2 rounded-md border">
+                {currentCartItems?.orderItems.map((item) => (
+                  <div
+                    key={`${item.id}-${currentCartItems?.voucher?.slug || 'no-voucher'}`}
+                    className="grid grid-cols-7 gap-4 items-center p-4 pb-4 w-full bg-white rounded-md sm:grid-cols-8 dark:bg-transparent"
+                  >
+                    {item?.image ? (
+                      <img
+                        src={publicFileURL + '/' + item?.image}
+                        alt={item.name}
+                        className="w-20 rounded-md sm:h-24 sm:w-36"
+                      />) : (
+                      <img src={ProductImage} alt={item.name} className="object-cover w-20 rounded-md rounded-t-md sm:h-24 sm:w-36" />
+                    )}
+                    <div className="grid flex-row col-span-7 gap-4 items-center w-full">
+                      <div
+                        className="grid flex-row grid-cols-7 gap-4 items-center w-full"
+                      >
+                        <div className="flex col-span-2 gap-2 w-full">
+                          <div className="flex flex-col gap-2 justify-start items-center w-full sm:flex-row sm:justify-center">
+                            <div className="flex flex-col gap-2 w-full">
+                              <span className="overflow-hidden w-full text-xs font-bold truncate whitespace-nowrap sm:text-sm text-ellipsis">
+                                {item.name}
+                              </span>
+                              <span className="inline-block relative text-xs sm:text-sm text-muted-foreground">
+                                {(() => {
+                                  const displayItem = displayItems.find(di => di.slug === item.slug)
+                                  const original = item.originalPrice || 0
+                                  const priceAfterPromotion = displayItem?.priceAfterPromotion || 0
+                                  const finalPrice = displayItem?.finalPrice || 0
+
+                                  const isSamePriceVoucher =
+                                    currentCartItems?.voucher?.type === VOUCHER_TYPE.SAME_PRICE_PRODUCT &&
+                                    currentCartItems?.voucher?.voucherProducts?.some(vp => vp.product?.slug === item.slug)
+
+                                  // const hasPromotionDiscount = (displayItem?.promotionDiscount || 0) > 0
+
+                                  const isAtLeastOneVoucher =
+                                    currentCartItems?.voucher?.applicabilityRule === APPLICABILITY_RULE.AT_LEAST_ONE_REQUIRED &&
+                                    currentCartItems?.voucher?.voucherProducts?.some(vp => vp.product?.slug === item.slug)
+
+                                  const hasVoucherDiscount = (displayItem?.voucherDiscount ?? 0) > 0
+                                  const hasPromotionDiscount = (displayItem?.promotionDiscount ?? 0) > 0
+
+                                  // finalPrice là giá cuối cùng hiển thị trên UI
+                                  const displayPrice = isSamePriceVoucher
+                                    ? finalPrice // đồng giá
+                                    : isAtLeastOneVoucher && hasVoucherDiscount
+                                      ? original - (displayItem?.voucherDiscount || 0)
+                                      : hasPromotionDiscount
+                                        ? priceAfterPromotion
+                                        : original
+                                  // const hasVoucherDiscount = (displayItem?.voucherDiscount || 0) > 0
+
+                                  const shouldShowLineThrough =
+                                    (isSamePriceVoucher || hasPromotionDiscount || hasVoucherDiscount) &&
+                                    (original > displayPrice)
+
+
+                                  const note = isSamePriceVoucher
+                                    ? '(**)'
+                                    : hasPromotionDiscount
+                                      ? '(*)'
+                                      : ''
+
+                                  return (
+                                    <div className="flex gap-1 items-center">
+                                      {shouldShowLineThrough && original !== finalPrice && (
+                                        <span className="text-sm line-through">
+                                          {formatCurrency(original)}
+                                        </span>
+                                      )}
+                                      <span className="font-bold text-primary">
+                                        {formatCurrency(displayPrice)}
+                                      </span>
+                                      {note && <span className="text-sm">{note}</span>}
+                                    </div>
+                                  )
+                                })()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex col-span-2 justify-center">
+                          {item.isCustomPrice ? (
+                            <span className="w-4 text-xs text-center">1</span>
+                          ) : (
+                            <QuantitySelector cartItem={item} />
+                          )}
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-sm font-semibold text-primary">
+                            {(() => {
+                              const displayItem = displayItems.find(di => di.slug === item.slug)
+                              const original = item.originalPrice || 0
+                              const priceAfterPromotion = displayItem?.priceAfterPromotion || 0
+                              const finalPrice = displayItem?.finalPrice || 0
+                              const isAtLeastOneVoucher =
+                                currentCartItems?.voucher?.applicabilityRule === APPLICABILITY_RULE.AT_LEAST_ONE_REQUIRED &&
+                                currentCartItems?.voucher?.voucherProducts?.some(vp => vp.product?.slug === item.slug)
+                              const hasVoucherDiscount = displayItem?.voucherDiscount && displayItem?.voucherDiscount > 0
+                              const hasPromotionDiscount = (displayItem?.promotionDiscount || 0) > 0
+
+                              const shouldUseFinalPrice =
+                                currentCartItems?.voucher?.type === VOUCHER_TYPE.SAME_PRICE_PRODUCT &&
+                                currentCartItems?.voucher?.voucherProducts?.some(vp => vp.product?.slug === item.slug)
+
+                              const displayPrice = shouldUseFinalPrice
+                                ? finalPrice * item.quantity
+                                : isAtLeastOneVoucher && hasVoucherDiscount
+                                  ? (original - (displayItem?.voucherDiscount || 0)) * item.quantity
+                                  : hasPromotionDiscount
+                                    ? priceAfterPromotion * item.quantity
+                                    : original * item.quantity
+
+                              return (
+                                <div className="flex gap-1 justify-center">
+                                  <span className="font-bold text-primary">
+                                    {formatCurrency(displayPrice)}
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                          </span>
+                        </div>
+                        <div className="flex col-span-1 justify-center">
+                          <DeleteCartItemDialog cartItem={item} />
+                        </div>
+                      </div>
+                      <CartNoteInput cartItem={item} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col gap-2">
+                <OrderNoteInput order={currentCartItems} />
+                {/* Chú thích bên dưới order note */}
+                <div className="p-3 rounded-md border bg-primary/10 border-primary">
+                  <div className="flex gap-2 items-start text-sm text-primary">
+                    <div className="flex-1">
+                      <p className="text-xs text-primary">
+                        <span className="font-extrabold">{t('order.voucher')}</span>
+                      </p>
+                      <ul className="mt-1 space-y-1 text-xs text-primary">
+                        <li className="flex gap-1 items-center">
+                          <span className="font-bold text-primary">*</span>
+                          <span>{t('order.promotionDiscount')}</span>
+                        </li>
+                        <li className="flex gap-1 items-center">
+                          <span className="font-bold text-primary">**</span>
+                          <span>{t('order.itemLevelVoucher')}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                {!hasCustomPriceItems && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t('order.voucher')}
+                      </span>
+                    </div>
+                    <VoucherListSheet />
+                    <div>
+                      {currentCartItems?.voucher && (
+                        <div className="flex justify-start w-full">
+                          <div className="flex flex-col items-start">
+                            <div className="flex gap-2 items-center mt-2">
+                              <Badge variant='outline' className="text-[10px] px-1 border-primary text-primary">
+                                {(() => {
+                                  const voucher = currentCartItems?.voucher
+                                  if (!voucher) return null
+
+                                  const { type, value, applicabilityRule: rule } = voucher
+
+                                  const discountValueText =
+                                    type === VOUCHER_TYPE.PERCENT_ORDER
+                                      ? tVoucher('voucher.percentDiscount', { value })
+                                      : type === VOUCHER_TYPE.FIXED_VALUE
+                                        ? tVoucher('voucher.fixedDiscount', { value: formatCurrency(value) })
+                                        : type === VOUCHER_TYPE.SAME_PRICE_PRODUCT
+                                          ? tVoucher('voucher.samePriceProduct', { value: formatCurrency(value) })
+                                          : ''
+
+                                  const ruleText =
+                                    rule === APPLICABILITY_RULE.ALL_REQUIRED
+                                      ? tVoucher(
+                                        type === VOUCHER_TYPE.SAME_PRICE_PRODUCT
+                                          ? 'voucher.requireAllSamePrice'
+                                          : type === VOUCHER_TYPE.PERCENT_ORDER
+                                            ? 'voucher.requireAllPercent'
+                                            : 'voucher.requireAllFixed'
+                                      )
+                                      : rule === APPLICABILITY_RULE.AT_LEAST_ONE_REQUIRED
+                                        ? tVoucher(
+                                          type === VOUCHER_TYPE.SAME_PRICE_PRODUCT
+                                            ? 'voucher.requireAtLeastOneSamePrice'
+                                            : type === VOUCHER_TYPE.PERCENT_ORDER
+                                              ? 'voucher.requireAtLeastOnePercent'
+                                              : 'voucher.requireAtLeastOneFixed'
+                                        )
+                                        : ''
+
+                                  return `${discountValueText} ${ruleText}`
+                                })()}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex flex-col justify-between items-end p-4 pt-4 mt-4 bg-white rounded-md border dark:bg-transparent">
+                <div className="flex flex-col justify-between items-start w-full">
+                  <div className="flex flex-col gap-2 w-full text-sm text-muted-foreground">
+
+                    {/* Tổng giá gốc */}
+                    <div className="flex justify-between">
+                      <span>{t('order.subtotalBeforeDiscount')}</span>
+                      <span>{formatCurrency(cartTotals.subTotalBeforeDiscount)}</span>
+                    </div>
+
+                    {/* Giảm giá khuyến mãi (promotion) */}
+                    {cartTotals.promotionDiscount > 0 && (
+                      <div className="flex justify-between italic text-muted-foreground/40">
+                        <span>{t('order.promotionDiscount')}</span>
+                        <span>-{formatCurrency(cartTotals.promotionDiscount)}</span>
+                      </div>
+                    )}
+
+                    {/* Tổng giảm giá voucher */}
+                    {cartTotals.voucherDiscount > 0 && (
+                      <div className='flex flex-col justify-between items-start w-full'>
+                        <div className="flex justify-between w-full italic text-green-600">
+                          <span>{t('order.voucherDiscount')}</span>
+                          <span>-{formatCurrency(cartTotals.voucherDiscount)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs italic text-muted-foreground/80">
+                          <span>({t('order.partialAppliedNote')})</span>
+                        </div>
+                      </div>
+                    )}
+                    {currentCartItems?.type === OrderTypeEnum.DELIVERY && (
+                      <div className="flex justify-between">
+                        <span>{t('order.deliveryFee')}</span>
+                        <span>{formatCurrency(deliveryFee.deliveryFee)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-2 mt-2 font-semibold border-t text-md">
+                      <span>{t('order.totalPayment')}</span>
+                      <span className="text-2xl font-bold text-primary">{formatCurrency(cartTotals.finalTotal + deliveryFee.deliveryFee)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="my-4">
+              <div className="flex flex-col gap-2 mb-2 rounded-md border dark:border-muted-foreground/60">
+                {currentCartItems?.orderItems.map((item) => (
+                  <div
+                    key={`${item.id}-${currentCartItems?.voucher?.slug || 'no-voucher'}`}
+                    className="flex flex-col gap-4 items-center p-3 w-full bg-white rounded-md border dark:bg-transparent"
+                  >
+                    <div className="flex gap-2 items-center w-full h-24">
+                      {item?.image ? (
+                        <img
+                          src={publicFileURL + '/' + item?.image}
+                          alt={item.name}
+                          className="w-20 rounded-md sm:h-24 sm:w-36"
+                        />) : (
+                        <img src={ProductImage} alt={item.name} className="object-cover w-20 rounded-md rounded-t-md sm:h-24 sm:w-36" />
+                      )}
+                      <div className="flex flex-col gap-1 justify-between w-full h-full">
+                        <div className='flex justify-between items-start w-full h-full'>
+                          <div className='flex justify-between items-center w-full'>
+                            <span className="w-full overflow-hidden text-[18px] font-bold truncate whitespace-nowrap sm:text-sm text-ellipsis">
+                              {item.name}
+                            </span>
+                            <DeleteCartItemDialog cartItem={item} />
+                          </div>
+                        </div>
+                        <ProductVariantSelect variant={item.allVariants} onChange={handleChangeVariant} />
+                        <div className="flex justify-between items-center w-full">
+                          <span className="inline-block relative text-xs sm:text-sm text-muted-foreground">
+                            {(() => {
+                              const displayItem = displayItems.find(di => di.slug === item.slug)
+                              const original = item.originalPrice || 0
+                              const priceAfterPromotion = displayItem?.priceAfterPromotion || 0
+                              const finalPrice = displayItem?.finalPrice || 0
+
+                              const isSamePriceVoucher =
+                                currentCartItems?.voucher?.type === VOUCHER_TYPE.SAME_PRICE_PRODUCT &&
+                                currentCartItems?.voucher?.voucherProducts?.some(vp => vp.product?.slug === item.slug)
+
+                              // const hasPromotionDiscount = (displayItem?.promotionDiscount || 0) > 0
+
+                              const isAtLeastOneVoucher =
+                                currentCartItems?.voucher?.applicabilityRule === APPLICABILITY_RULE.AT_LEAST_ONE_REQUIRED &&
+                                currentCartItems?.voucher?.voucherProducts?.some(vp => vp.product?.slug === item.slug)
+
+                              const hasVoucherDiscount = (displayItem?.voucherDiscount ?? 0) > 0
+                              const hasPromotionDiscount = (displayItem?.promotionDiscount ?? 0) > 0
+                              // finalPrice là giá cuối cùng hiển thị trên UI
+                              const displayPrice = isSamePriceVoucher
+                                ? finalPrice // đồng giá
+                                : isAtLeastOneVoucher && hasVoucherDiscount
+                                  ? original - (displayItem?.voucherDiscount || 0)
+                                  : hasPromotionDiscount
+                                    ? priceAfterPromotion
+                                    : original
+
+                              // const hasVoucherDiscount = (displayItem?.voucherDiscount || 0) > 0
+
+                              const shouldShowLineThrough =
+                                isSamePriceVoucher || hasPromotionDiscount || hasVoucherDiscount
+
+
+                              const note = isSamePriceVoucher
+                                ? '(**)'
+                                : hasPromotionDiscount
+                                  ? '(*)'
+                                  : ''
+
+                              return (
+                                <div className="flex gap-1 items-center">
+                                  {shouldShowLineThrough && original !== finalPrice && (
+                                    <span className="text-[0.5rem] line-through sm:text-sm">
+                                      {formatCurrency(original)}
+                                    </span>
+                                  )}
+                                  <span className="font-bold text-primary">
+                                    {formatCurrency(displayPrice)}
+                                  </span>
+                                  {note && <span className="text-sm">{note}</span>}
+                                </div>
+                              )
+                            })()}
+                          </span>
+                          {item.isCustomPrice ? (
+                            <span className="w-4 text-xs text-center">1</span>
+                          ) : (
+                            <QuantitySelector cartItem={item} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <CartNoteInput cartItem={item} />
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className='flex justify-center items-center bg-white rounded-md border dark:bg-transparent'>
+                  <OrderNoteInput order={currentCartItems} />
+                </div>
+                {/* Chú thích bên dưới order note */}
+                <div className="p-3 rounded-md border bg-muted-foreground/5 border-muted-foreground/40">
+                  <div className="flex gap-2 items-start text-sm">
+                    <div className="flex-1">
+                      <p className="text-xs">
+                        <span className="font-extrabold">{t('order.voucher')}</span>
+                      </p>
+                      <ul className="mt-1 space-y-1 text-xs">
+                        <li className="flex gap-1 items-center">
+                          <span className="font-bold">*</span>
+                          <span className="text-muted-foreground/80">{t('order.promotionDiscount')}</span>
+                        </li>
+                        <li className="flex gap-1 items-center">
+                          <span className="font-bold">**</span>
+                          <span className="text-muted-foreground/80">{t('order.itemLevelVoucher')}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                {!hasCustomPriceItems && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {t('order.voucher')}
+                      </span>
+                    </div>
+                    <VoucherListSheet />
+                    <div>
+                      {currentCartItems?.voucher && (
+                        <div className="flex justify-start w-full">
+                          <div className="flex flex-col items-start">
+                            <div className="flex gap-2 items-center mt-2">
+                              <Badge variant='outline' className="text-[10px] px-1 border-primary text-primary">
+                                {(() => {
+                                  const voucher = currentCartItems?.voucher
+                                  if (!voucher) return null
+
+                                  const { type, value, applicabilityRule: rule } = voucher
+
+                                  const discountValueText =
+                                    type === VOUCHER_TYPE.PERCENT_ORDER
+                                      ? tVoucher('voucher.percentDiscount', { value })
+                                      : type === VOUCHER_TYPE.FIXED_VALUE
+                                        ? tVoucher('voucher.fixedDiscount', { value: formatCurrency(value) })
+                                        : type === VOUCHER_TYPE.SAME_PRICE_PRODUCT
+                                          ? tVoucher('voucher.samePriceProduct', { value: formatCurrency(value) })
+                                          : ''
+
+                                  const ruleText =
+                                    rule === APPLICABILITY_RULE.ALL_REQUIRED
+                                      ? tVoucher(
+                                        type === VOUCHER_TYPE.SAME_PRICE_PRODUCT
+                                          ? 'voucher.requireAllSamePrice'
+                                          : type === VOUCHER_TYPE.PERCENT_ORDER
+                                            ? 'voucher.requireAllPercent'
+                                            : 'voucher.requireAllFixed'
+                                      )
+                                      : rule === APPLICABILITY_RULE.AT_LEAST_ONE_REQUIRED
+                                        ? tVoucher(
+                                          type === VOUCHER_TYPE.SAME_PRICE_PRODUCT
+                                            ? 'voucher.requireAtLeastOneSamePrice'
+                                            : type === VOUCHER_TYPE.PERCENT_ORDER
+                                              ? 'voucher.requireAtLeastOnePercent'
+                                              : 'voucher.requireAtLeastOneFixed'
+                                        )
+                                        : ''
+
+                                  return `${discountValueText} ${ruleText}`
+                                })()}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex flex-col justify-between items-end p-2 pt-4 mt-4 bg-white rounded-md border dark:bg-transparent">
+                <div className="flex flex-col justify-between items-start w-full">
+                  <div className="flex flex-col gap-2 w-full text-sm text-muted-foreground">
+
+                    {/* Tổng giá gốc */}
+                    <div className="flex justify-between">
+                      <span>{t('order.subtotalBeforeDiscount')}</span>
+                      <span>{formatCurrency(cartTotals.subTotalBeforeDiscount)}</span>
+                    </div>
+
+                    {/* Giảm giá khuyến mãi (promotion) */}
+                    {cartTotals.promotionDiscount > 0 && (
+                      <div className="flex justify-between italic text-muted-foreground/80">
+                        <span>{t('order.promotionDiscount')}</span>
+                        <span>-{formatCurrency(cartTotals.promotionDiscount)}</span>
+                      </div>
+                    )}
+
+                    {/* Tổng giảm giá voucher */}
+                    {cartTotals.voucherDiscount > 0 && (
+                      <div className='flex flex-col justify-between items-start w-full'>
+                        <div className="flex justify-between w-full italic text-green-600">
+                          <span>{t('order.voucherDiscount')}</span>
+                          <span>-{formatCurrency(cartTotals.voucherDiscount)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs italic text-muted-foreground/80">
+                          <span>({t('order.partialAppliedNote')})</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-2 mt-2 font-semibold border-t text-md">
+                      <span>{t('order.totalPayment')}</span>
+                      <span className="text-2xl font-bold text-primary">{formatCurrency(cartTotals.finalTotal + deliveryFee.deliveryFee)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Button */}
+
+          {!isMobile ? (
+            <div className='grid grid-cols-6'>
+              <div className="col-span-1 col-start-6">
+                <div className="flex justify-end w-full">
+                  <CreateOrderDialog
+                    disabled={
+                      !currentCartItems ||
+                      hasUnpricedCustomItems ||
+                      (currentCartItems?.type === OrderTypeEnum.AT_TABLE && !currentCartItems?.table) ||
+                      (currentCartItems?.type === OrderTypeEnum.DELIVERY && (
+                        !currentCartItems?.deliveryAddress ||
+                        !currentCartItems?.deliveryPhone ||
+                        !PHONE_NUMBER_REGEX.test(currentCartItems?.deliveryPhone)
+                      ))
+                    }
+                    disabledText={hasUnpricedCustomItems ? t('menu.enterCustomPriceFirst') : undefined}
+                  />
+                </div>
+              </div>
+            </div>
+
+          ) : (
+            <div className={cn('fixed right-0 left-0 z-50 bg-white dark:bg-background', isMobile ? 'bottom-[calc(5rem+env(safe-area-inset-bottom))]' : 'bottom-20')}>
+              <div className='grid grid-cols-2 justify-between items-center px-2 py-4'>
+                <div className="flex col-span-1 gap-1 justify-center items-center font-semibold">
+                  {/* <span>{t('order.totalPayment')}</span> */}
+                  <span className="text-xl font-bold text-primary">{formatCurrency(cartTotals.finalTotal + deliveryFee.deliveryFee)}</span>
+                </div>
+                <div className="flex col-span-1 justify-end p-0 w-full">
+                  <CreateOrderDialog
+                    disabled={
+                      !currentCartItems ||
+                      hasUnpricedCustomItems ||
+                      (currentCartItems?.type === OrderTypeEnum.AT_TABLE &&
+                        !currentCartItems?.table)
+                    }
+                    disabledText={hasUnpricedCustomItems ? t('menu.enterCustomPriceFirst') : undefined}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

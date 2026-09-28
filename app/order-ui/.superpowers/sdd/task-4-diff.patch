@@ -1,0 +1,1295 @@
+diff --git a/app/order-ui/src/api/vat-admin.ts b/app/order-ui/src/api/vat-admin.ts
+index 0e6f682..f9ca820 100644
+--- a/app/order-ui/src/api/vat-admin.ts
++++ b/app/order-ui/src/api/vat-admin.ts
+@@ -1,14 +1,13 @@
+ import http from '@/utils/http'
+ import type {
+   IApiResponse,
+-  IUpdateAccountantInfoBody,
+   IUpdateVatRequestBody,
+   IUpdateVatStatusBody,
+   IVatRequestListItem,
+   IVatRequestListParams,
+   IVatRequestListResponse,
+ } from '@/types'
+ 
+ /**
+  * GET /vat-request — paginated list. BE chỉ accept 1 status per request.
+  * UI single-select (PENDING / PROCESSING / COMPLETED / REJECTED / undefined=all).
+@@ -37,32 +36,20 @@ export async function updateVatRequest(
+   slug: string,
+   body: IUpdateVatRequestBody,
+ ): Promise<IApiResponse<IVatRequestListItem>> {
+   const response = await http.patch<IApiResponse<IVatRequestListItem>>(
+     `/vat-request/${slug}`,
+     body,
+   )
+   return response.data
+ }
+ 
+-/** Bước 5 — Kế toán cập nhật số HĐ + ghi chú nội bộ. */
+-export async function updateAccountantInfo(
+-  slug: string,
+-  body: IUpdateAccountantInfoBody,
+-): Promise<IApiResponse<IVatRequestListItem>> {
+-  const response = await http.patch<IApiResponse<IVatRequestListItem>>(
+-    `/vat-request/${slug}/accountant-info`,
+-    body,
+-  )
+-  return response.data
+-}
+-
+ /** Bước 7 — Chuyển trạng thái workflow. */
+ export async function updateVatStatus(
+   slug: string,
+   body: IUpdateVatStatusBody,
+ ): Promise<IApiResponse<IVatRequestListItem>> {
+   const response = await http.patch<IApiResponse<IVatRequestListItem>>(
+     `/vat-request/${slug}/status`,
+     body,
+   )
+   return response.data
+diff --git a/app/order-ui/src/components/app/dialog/status-transition-confirm-dialog.tsx b/app/order-ui/src/components/app/dialog/status-transition-confirm-dialog.tsx
+index 60f5f29..8403fa3 100644
+--- a/app/order-ui/src/components/app/dialog/status-transition-confirm-dialog.tsx
++++ b/app/order-ui/src/components/app/dialog/status-transition-confirm-dialog.tsx
+@@ -124,21 +124,21 @@ export function StatusTransitionConfirmDialog({
+               <input
+                 type="text"
+                 data-testid="vat-transition-invoice"
+                 placeholder="VD: HD-2026-001"
+                 className="rounded border px-2 py-1 text-sm"
+                 {...register('invoiceNumber')}
+               />
+               <span className="text-[11px] text-muted-foreground">
+                 {t(
+                   'transition.invoiceHint',
+-                  'Nếu đã lưu sẵn ở tab "Kế toán" thì hệ thống tự điền — chỉ cần kiểm tra rồi xác nhận.',
++                  'Nếu đã lưu sẵn ở tab "Phát hành HĐ" thì hệ thống tự điền — chỉ cần kiểm tra rồi xác nhận.',
+                 )}
+               </span>
+               {errors.invoiceNumber && (
+                 <span
+                   data-testid="vat-transition-invoice-error"
+                   className="text-xs text-destructive"
+                 >
+                   {t('transition.invoiceRequired', 'Vui lòng nhập số hoá đơn')}
+                 </span>
+               )}
+diff --git a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/accountant-info-section.tsx b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/accountant-info-section.tsx
+deleted file mode 100644
+index 896be1b..0000000
+--- a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/accountant-info-section.tsx
++++ /dev/null
+@@ -1,144 +0,0 @@
+-import { useState } from 'react'
+-import { useForm } from 'react-hook-form'
+-import { zodResolver } from '@hookform/resolvers/zod'
+-import { useTranslation } from 'react-i18next'
+-
+-import { Button } from '@/components/ui'
+-import { ConfirmUpdateVatRequestDialog } from '@/components/app/dialog'
+-import { useUpdateAccountantInfo } from '@/hooks/use-vat-admin'
+-import {
+-  vatUpdateAccountantSchema,
+-  type TVatUpdateAccountant,
+-} from '@/schemas/vat-admin.schema'
+-import { showErrorToastMessage, showToast } from '@/utils'
+-import type { IVatRequestListItem } from '@/types'
+-
+-interface AccountantInfoSectionProps {
+-  vatRequest: IVatRequestListItem
+-  isLocked: boolean
+-  onUpdated: (updated: IVatRequestListItem) => void
+-}
+-
+-export function AccountantInfoSection({
+-  vatRequest,
+-  isLocked,
+-  onUpdated,
+-}: AccountantInfoSectionProps) {
+-  const { t } = useTranslation('vatAdmin')
+-  const { t: tToast } = useTranslation('toast')
+-  const { mutate, isPending } = useUpdateAccountantInfo()
+-  const [pendingPayload, setPendingPayload] = useState<TVatUpdateAccountant | null>(
+-    null,
+-  )
+-
+-  const {
+-    register,
+-    handleSubmit,
+-    formState: { errors, dirtyFields },
+-  } = useForm<TVatUpdateAccountant>({
+-    resolver: zodResolver(vatUpdateAccountantSchema),
+-    defaultValues: {
+-      invoiceNumber: vatRequest.invoiceNumber ?? '',
+-      accountantNote: vatRequest.accountantNote ?? '',
+-    },
+-  })
+-
+-  // PATCH /vat-request/:slug/accountant-info nhận full 2 field — gửi cả 2 kể
+-  // cả khi chỉ dirty 1 để tránh BE clear field undefined.
+-  const onSubmit = (values: TVatUpdateAccountant) => {
+-    if (Object.keys(dirtyFields).length === 0) return
+-    setPendingPayload({
+-      invoiceNumber: values.invoiceNumber ?? '',
+-      accountantNote: values.accountantNote ?? '',
+-    })
+-  }
+-
+-  const handleConfirm = () => {
+-    if (!pendingPayload) return
+-    mutate(
+-      { slug: vatRequest.slug, body: pendingPayload },
+-      {
+-        onSuccess: (resp) => {
+-          showToast(
+-            tToast('toast.vatAccountantUpdateSuccess', 'Cập nhật kế toán info thành công'),
+-          )
+-          onUpdated(resp.result)
+-          setPendingPayload(null)
+-        },
+-        onError: (err: unknown) => {
+-          // Toast luôn dùng Vietnamese fallback — tránh hiển BE message Anh
+-          // trên UI Việt. BE message log console cho dev debug.
+-          const e = err as {
+-            response?: { data?: { message?: string } }
+-            message?: string
+-          }
+-          // eslint-disable-next-line no-console
+-          console.error('[vat-accountant update]', e?.response?.data?.message || e?.message)
+-          showErrorToastMessage(
+-            tToast('toast.vatAccountantUpdateFailed', 'Cập nhật thông tin kế toán thất bại'),
+-          )
+-          setPendingPayload(null)
+-        },
+-      },
+-    )
+-  }
+-
+-  return (
+-    <section className="space-y-3" data-testid="vat-accountant-info-section">
+-      <h2 className="text-sm font-semibold text-muted-foreground">
+-        {t('accountantInfo.title', 'KẾ TOÁN INFO')}
+-      </h2>
+-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+-        <div className="flex flex-col gap-1">
+-          <label className="text-xs text-muted-foreground">
+-            {t('accountantInfo.invoiceNumber', 'Số hoá đơn')}
+-          </label>
+-          <input
+-            type="text"
+-            data-testid="vat-accountant-invoice-number"
+-            disabled={isLocked}
+-            className="rounded border px-2 py-1 text-sm disabled:bg-muted disabled:opacity-70"
+-            {...register('invoiceNumber')}
+-          />
+-          {errors.invoiceNumber && (
+-            <span className="text-xs text-destructive">{errors.invoiceNumber.message}</span>
+-          )}
+-        </div>
+-        <div className="flex flex-col gap-1">
+-          <label className="text-xs text-muted-foreground">
+-            {t('accountantInfo.note', 'Ghi chú nội bộ')}
+-          </label>
+-          <textarea
+-            data-testid="vat-accountant-note"
+-            disabled={isLocked}
+-            rows={2}
+-            className="rounded border px-2 py-1 text-sm disabled:bg-muted disabled:opacity-70"
+-            {...register('accountantNote')}
+-          />
+-        </div>
+-        {!isLocked && (
+-          <Button
+-            type="submit"
+-            data-testid="vat-accountant-save"
+-            disabled={isPending}
+-            size="sm"
+-          >
+-            {t('accountantInfo.save', 'Lưu')}
+-          </Button>
+-        )}
+-      </form>
+-
+-      <ConfirmUpdateVatRequestDialog
+-        open={pendingPayload !== null}
+-        onOpenChange={(o) => !o && !isPending && setPendingPayload(null)}
+-        title={t('accountantInfo.confirmTitle', 'Cập nhật thông tin kế toán')}
+-        description={t(
+-          'accountantInfo.confirmDescription',
+-          'Xác nhận cập nhật số hoá đơn / ghi chú nội bộ cho yêu cầu này?',
+-        )}
+-        isPending={isPending}
+-        onConfirm={handleConfirm}
+-      />
+-    </section>
+-  )
+-}
+diff --git a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/overview-tab.tsx b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/overview-tab.tsx
+index f66c143..a6cb5e5 100644
+--- a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/overview-tab.tsx
++++ b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/overview-tab.tsx
+@@ -58,27 +58,24 @@ export function OverviewTab({ vatRequest }: OverviewTabProps) {
+         </Row>
+         <Row label={t('customerInfo.email', 'Email')}>{v.email}</Row>
+         {v.address && (
+           <Row label={t('customerInfo.address', 'Địa chỉ')}>{v.address}</Row>
+         )}
+         {v.note && (
+           <Row label={t('customerInfo.note', 'Ghi chú')}>{v.note}</Row>
+         )}
+       </Group>
+ 
+-      <Group title={t('overview.accountant', 'KẾ TOÁN')}>
++      <Group title={t('overview.accountant', 'PHÁT HÀNH HOÁ ĐƠN')}>
+         <Row label={t('accountantInfo.invoiceNumber', 'Số hoá đơn')}>
+           <span className="font-mono">{v.invoiceNumber || '—'}</span>
+         </Row>
+-        <Row label={t('accountantInfo.note', 'Ghi chú nội bộ')}>
+-          {v.accountantNote || '—'}
+-        </Row>
+         <Row label={t('overview.requestedAt', 'Ngày yêu cầu')}>
+           {moment(v.createdAt).format('HH:mm DD/MM/YYYY')}
+         </Row>
+       </Group>
+     </div>
+   )
+ }
+ 
+ function Group({
+   title,
+diff --git a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/vat-request-detail-sheet.tsx b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/vat-request-detail-sheet.tsx
+index 4a59676..cf7a2e2 100644
+--- a/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/vat-request-detail-sheet.tsx
++++ b/app/order-ui/src/components/app/sheet/vat-request-detail-sheet/vat-request-detail-sheet.tsx
+@@ -1,12 +1,12 @@
+ import { useEffect, useState } from 'react'
+-import { CheckCircle2, PlayCircle, XCircle } from 'lucide-react'
++import { CheckCircle2, PlayCircle, RotateCcw, XCircle } from 'lucide-react'
+ import { useTranslation } from 'react-i18next'
+ 
+ import {
+   Badge,
+   Button,
+   Sheet,
+   SheetContent,
+   SheetDescription,
+   SheetFooter,
+   SheetHeader,
+@@ -15,84 +15,85 @@ import {
+   TabsContent,
+   TabsList,
+   TabsTrigger,
+ } from '@/components/ui'
+ import { useHasVatPermission } from '@/hooks/use-vat-admin'
+ import { canTransition } from '@/lib/vat-status-transitions'
+ import type { IVatRequestListItem } from '@/types'
+ import { VatRequestStatus } from '@/types'
+ import { StatusTransitionConfirmDialog } from '@/components/app/dialog'
+ 
+-import { AccountantInfoSection } from './accountant-info-section'
+ import { CustomerInfoSection } from './customer-info-section'
+ import { OverviewTab } from './overview-tab'
+ 
+ interface VatRequestDetailSheetProps {
+   vatRequest: IVatRequestListItem | null
+   onClose: () => void
+ }
+ 
+ const STATUS_COLORS: Record<VatRequestStatus, string> = {
+   [VatRequestStatus.PENDING]: 'bg-gray-100 text-gray-700',
+   [VatRequestStatus.PROCESSING]: 'bg-blue-100 text-blue-700',
+   [VatRequestStatus.COMPLETED]: 'bg-green-100 text-green-700',
+   [VatRequestStatus.REJECTED]: 'bg-red-100 text-red-700',
+ }
+ 
+ type TransitionMeta = {
+   variant: 'default' | 'outline' | 'destructive'
+   Icon: typeof CheckCircle2
+ }
+ 
+-/** UX chuẩn ngành: PROCESSING = neutral outline, COMPLETED = primary (gold,
+- *  positive next-natural step), REJECTED = destructive (red). Icons giúp
+- *  nhận diện nhanh không cần đọc chữ. */
++/** UX: PENDING = rollback outline (RotateCcw), PROCESSING = neutral outline,
++ *  COMPLETED = primary (positive next-natural step), REJECTED = destructive (red).
++ *  Icons giúp nhận diện nhanh không cần đọc chữ. */
+ const TRANSITION_META: Record<VatRequestStatus, TransitionMeta> = {
+-  [VatRequestStatus.PENDING]: { variant: 'outline', Icon: PlayCircle },
++  [VatRequestStatus.PENDING]: { variant: 'outline', Icon: RotateCcw },
+   [VatRequestStatus.PROCESSING]: { variant: 'outline', Icon: PlayCircle },
+   [VatRequestStatus.COMPLETED]: { variant: 'default', Icon: CheckCircle2 },
+   [VatRequestStatus.REJECTED]: { variant: 'destructive', Icon: XCircle },
+ }
+ 
+-/** Forward transitions (theo state machine doc). Hide khi terminal. */
++/** LEFT group transitions: PENDING (rollback) + PROCESSING + COMPLETED.
++ *  RIGHT group: REJECTED — tách riêng phía bên phải footer.
++ *  Free transitions: canTransition chỉ chặn same-status. */
+ const FORWARD_TARGETS: VatRequestStatus[] = [
++  VatRequestStatus.PENDING,
+   VatRequestStatus.PROCESSING,
+   VatRequestStatus.COMPLETED,
+ ]
+ 
+ /**
+  * Pattern Sheet shadcn chuẩn: SheetHeader (title + status) → scrollable body
+  * (sections customer + accountant) → SheetFooter sticky (workflow transitions
+  * trái + Close phải). Tuân theo industry RBAC admin tools: state-changing
+  * actions ở footer, edit forms inline trong body.
+  */
+ export function VatRequestDetailSheet({
+   vatRequest,
+   onClose,
+ }: VatRequestDetailSheetProps) {
+   const { t } = useTranslation('vatAdmin')
+   const [snapshot, setSnapshot] = useState<IVatRequestListItem | null>(null)
+   const [transitionTarget, setTransitionTarget] = useState<VatRequestStatus | null>(null)
+-  const { canEdit, canEditAccountant, canUpdateStatus } = useHasVatPermission()
++  const { canEdit, canUpdateStatus } = useHasVatPermission()
+ 
+   useEffect(() => {
+     if (vatRequest) setSnapshot({ ...vatRequest })
+     else setSnapshot(null)
+   }, [vatRequest])
+ 
+   if (!snapshot) return null
+ 
+   const isTerminal =
+     snapshot.status === VatRequestStatus.COMPLETED ||
+     snapshot.status === VatRequestStatus.REJECTED
+   const customerLocked = isTerminal || !canEdit
+-  const accountantLocked = !canEditAccountant
+ 
+   const headerTitle =
+     snapshot.invoice?.referenceNumber != null
+       ? `#${snapshot.invoice.referenceNumber}`
+       : snapshot.slug
+ 
+   function handleOpenChange(open: boolean) {
+     if (!open) onClose()
+   }
+ 
+@@ -112,23 +113,23 @@ export function VatRequestDetailSheet({
+               className={STATUS_COLORS[snapshot.status]}
+             >
+               {t(`status.${snapshot.status}`, snapshot.status)}
+             </Badge>
+           </div>
+           <SheetDescription className="text-xs">
+             {t('detail.description', 'Quản lý thông tin và trạng thái yêu cầu xuất hoá đơn VAT')}
+           </SheetDescription>
+         </SheetHeader>
+ 
+-        {/* Tabs: Tổng quan (read) / Khách (edit) / Kế toán (edit). 90% case
+-            kế toán chỉ xem Tổng quan rồi action ở footer. Variant "line" =
+-            underline indicator (pattern customer-info-page). */}
++        {/* Tabs: Tổng quan (read) / Khách (edit). 90% case kế toán chỉ xem
++            Tổng quan rồi action ở footer. Variant "line" = underline indicator
++            (pattern customer-info-page). */}
+         <Tabs
+           defaultValue="overview"
+           className="flex flex-1 flex-col overflow-hidden"
+         >
+           <TabsList
+             variant="line"
+             className="mx-6 mt-2 flex h-auto w-full !justify-start gap-4 border-b"
+           >
+             <TabsTrigger
+               value="overview"
+@@ -137,54 +138,37 @@ export function VatRequestDetailSheet({
+             >
+               {t('tabs.overview', 'Tổng quan')}
+             </TabsTrigger>
+             <TabsTrigger
+               value="customer"
+               className="whitespace-nowrap px-1"
+               data-testid="vat-tab-customer"
+             >
+               {t('tabs.customer', 'Thông tin khách')}
+             </TabsTrigger>
+-            <TabsTrigger
+-              value="accountant"
+-              className="whitespace-nowrap px-1"
+-              data-testid="vat-tab-accountant"
+-            >
+-              {t('tabs.accountant', 'Kế toán')}
+-            </TabsTrigger>
+           </TabsList>
+           <TabsContent
+             value="overview"
+             className="flex-1 overflow-y-auto px-6 py-4"
+           >
+             <OverviewTab vatRequest={snapshot} />
+           </TabsContent>
+           <TabsContent
+             value="customer"
+             className="flex-1 overflow-y-auto px-6 py-4"
+           >
+             <CustomerInfoSection
+               vatRequest={snapshot}
+               isLocked={customerLocked}
+               onUpdated={(updated) => setSnapshot({ ...snapshot, ...updated })}
+             />
+           </TabsContent>
+-          <TabsContent
+-            value="accountant"
+-            className="flex-1 overflow-y-auto px-6 py-4"
+-          >
+-            <AccountantInfoSection
+-              vatRequest={snapshot}
+-              isLocked={accountantLocked}
+-              onUpdated={(updated) => setSnapshot({ ...snapshot, ...updated })}
+-            />
+-          </TabsContent>
+         </Tabs>
+ 
+         {/* Footer chuẩn ngành workflow admin:
+             - LEFT: forward actions (Bắt đầu xử lý / Hoàn thành) — chỉ show
+               transitions hợp lệ với current status, hide khi không dùng được
+               (không grey-out để giảm cognitive load)
+             - RIGHT: destructive (Từ chối) tách riêng + Close
+             - Terminal status → chỉ còn Close */}
+         <SheetFooter
+           className="flex-row items-center justify-between gap-2 border-t px-6 py-3 sm:justify-between"
+diff --git a/app/order-ui/src/hooks/use-vat-admin.ts b/app/order-ui/src/hooks/use-vat-admin.ts
+index 9712c9a..be4c421 100644
+--- a/app/order-ui/src/hooks/use-vat-admin.ts
++++ b/app/order-ui/src/hooks/use-vat-admin.ts
+@@ -1,27 +1,25 @@
+ import { useMemo } from 'react'
+ import {
+   useMutation,
+   useQuery,
+   useQueryClient,
+ } from '@tanstack/react-query'
+ 
+ import {
+   getVatRequests,
+-  updateAccountantInfo,
+   updateVatRequest,
+   updateVatStatus,
+ } from '@/api/vat-admin'
+ import { QUERYKEY, VAT_PERMISSIONS } from '@/constants'
+ import { useUserStore } from '@/stores'
+ import type {
+-  IUpdateAccountantInfoBody,
+   IUpdateVatRequestBody,
+   IUpdateVatStatusBody,
+   IVatRequestListParams,
+ } from '@/types'
+ 
+ /**
+  * List query. staleTime 30s + refetchOnMount: 'always' để khi user quay lại
+  * tab vẫn fresh. Không polling — refresh button + auto invalidate sau mutation
+  * là đủ.
+  */
+@@ -52,38 +50,20 @@ export const useUpdateVatRequest = () => {
+   return useMutation({
+     mutationFn: ({ slug, body }: { slug: string; body: IUpdateVatRequestBody }) =>
+       updateVatRequest(slug, body),
+     onSettled: () => {
+       qc.invalidateQueries({ queryKey: [...QUERYKEY.vatRequestsList] })
+     },
+     meta: { ignoreGlobalError: true },
+   })
+ }
+ 
+-/** Bước 5 mutation — sửa kế toán info. */
+-export const useUpdateAccountantInfo = () => {
+-  const qc = useQueryClient()
+-  return useMutation({
+-    mutationFn: ({
+-      slug,
+-      body,
+-    }: {
+-      slug: string
+-      body: IUpdateAccountantInfoBody
+-    }) => updateAccountantInfo(slug, body),
+-    onSettled: () => {
+-      qc.invalidateQueries({ queryKey: [...QUERYKEY.vatRequestsList] })
+-    },
+-    meta: { ignoreGlobalError: true },
+-  })
+-}
+-
+ /** Bước 7 mutation — chuyển trạng thái. */
+ export const useUpdateVatStatus = () => {
+   const qc = useQueryClient()
+   return useMutation({
+     mutationFn: ({
+       slug,
+       body,
+     }: {
+       slug: string
+       body: IUpdateVatStatusBody
+@@ -111,15 +91,14 @@ export const useUpdateVatStatus = () => {
+ export const useHasVatPermission = () => {
+   const { userInfo } = useUserStore()
+   return useMemo(() => {
+     const codes =
+       userInfo?.role?.permissions
+         ?.map((p) => p.authority?.code)
+         .filter((c): c is string => !!c) ?? []
+     return {
+       canView: codes.includes(VAT_PERMISSIONS.VIEW),
+       canEdit: codes.includes(VAT_PERMISSIONS.EDIT),
+-      canEditAccountant: codes.includes(VAT_PERMISSIONS.EDIT_ACCOUNTANT),
+       canUpdateStatus: codes.includes(VAT_PERMISSIONS.UPDATE_STATUS),
+     }
+   }, [userInfo])
+ }
+diff --git a/app/order-ui/src/lib/vat-status-transitions.ts b/app/order-ui/src/lib/vat-status-transitions.ts
+index 4cd655b..20375f0 100644
+--- a/app/order-ui/src/lib/vat-status-transitions.ts
++++ b/app/order-ui/src/lib/vat-status-transitions.ts
+@@ -1,17 +1,17 @@
+ import { VatRequestStatus } from '@/types'
+ 
+-const TERMINAL = new Set<VatRequestStatus>([
+-  VatRequestStatus.COMPLETED,
+-  VatRequestStatus.REJECTED,
+-])
+-
+-/** Mid workflow rules — see plan Global Constraints. */
++/**
++ * Transition rule:
++ * - COMPLETED là hard terminal — không cho chuyển sang bất kỳ status nào
++ *   (hoá đơn đã xuất, không được rollback).
++ * - Các status khác: free transition (có thể chuyển sang bất kỳ status khác,
++ *   ngoại trừ chính nó — block same-status để tránh no-op click).
++ * REJECTED vẫn cho transition tự do.
++ */
+ export function canTransition(
+   current: VatRequestStatus,
+   target: VatRequestStatus,
+ ): boolean {
+-  if (TERMINAL.has(current)) return false
+-  if (target === VatRequestStatus.PENDING) return false
+-  if (current === target) return false
+-  return true
++  if (current === VatRequestStatus.COMPLETED) return false
++  return current !== target
+ }
+diff --git a/app/order-ui/src/locales/en/toast.json b/app/order-ui/src/locales/en/toast.json
+index a8aaf02..bd7cac4 100644
+--- a/app/order-ui/src/locales/en/toast.json
++++ b/app/order-ui/src/locales/en/toast.json
+@@ -476,16 +476,14 @@
+     "qrCreationFailed": "Cannot generate QR. Please try again.",
+     "paymentSuccess": "Payment successful",
+     "cancelOrderSuccess": "Order cancelled",
+     "cancelOrderFailedRetry": "Failed to cancel order. Please try again.",
+     "voucherRequiresCustomer": "This voucher requires a customer. Please select a customer before paying.",
+     "vatSubmitSuccess": "VAT request submitted.",
+     "vatSubmitFailed": "Failed to submit VAT request. Please try again.",
+     "vatRequestNotFound": "VAT request not found.",
+     "vatRequestAlreadyExists": "VAT request already exists for this order.",
+     "vatAlreadySubmitted": "VAT request for this order has already been submitted.",
+-    "vatAccountantUpdateSuccess": "Accountant info updated successfully.",
+-    "vatAccountantUpdateFailed": "Failed to update accountant info.",
+     "vatStatusUpdated": "Status updated successfully.",
+     "vatStatusUpdateFailed": "Failed to update status."
+   }
+ }
+\ No newline at end of file
+diff --git a/app/order-ui/src/locales/en/vatAdmin.json b/app/order-ui/src/locales/en/vatAdmin.json
+index c83e3e9..346f2c7 100644
+--- a/app/order-ui/src/locales/en/vatAdmin.json
++++ b/app/order-ui/src/locales/en/vatAdmin.json
+@@ -37,67 +37,61 @@
+     "email": "Email",
+     "companyName": "Company name (optional)",
+     "note": "Note",
+     "save": "Save changes",
+     "confirmTitle": "Update customer info",
+     "confirmDescription": "Confirm updating the customer info for this VAT request?",
+     "saveSuccess": "Updated successfully",
+     "saveFailed": "Update failed"
+   },
+   "accountantInfo": {
+-    "title": "ACCOUNTANT INFO",
+-    "invoiceNumber": "Invoice number",
+-    "note": "Internal note",
+-    "save": "Save",
+-    "confirmTitle": "Update accountant info",
+-    "confirmDescription": "Confirm updating the invoice number / internal note for this VAT request?"
++    "invoiceNumber": "Invoice number"
+   },
+   "workflow": {
+     "title": "STATUS WORKFLOW",
+     "current": "Current",
+     "transitionTo": {
+       "PROCESSING": "Start processing",
+       "COMPLETED": "Complete",
+       "REJECTED": "Reject"
+     }
+   },
+   "detail": {
+     "description": "Manage VAT request information and workflow status"
+   },
+   "tabs": {
+     "overview": "Overview",
+-    "customer": "Customer info",
+-    "accountant": "Accountant"
++    "customer": "Customer info"
+   },
+   "overview": {
+     "invoice": "ORIGINAL INVOICE",
+     "customer": "CUSTOMER INFO",
+-    "accountant": "ACCOUNTANT",
++    "accountant": "INVOICE ISSUANCE",
+     "tableName": "Table",
+     "cashier": "Cashier",
+     "invoiceDate": "Order time",
+     "requestedAt": "Requested at",
+     "companyName": "Company"
+   },
+   "transition": {
+     "title": {
+       "PROCESSING": "Start processing?",
+       "COMPLETED": "Mark as COMPLETED?",
+       "REJECTED": "Reject this request?"
+     },
+     "description": {
+       "PROCESSING": "Mark this request as being processed. The customer is not notified at this step.",
+       "COMPLETED": "Complete the invoice issuance. Enter the actual invoice number issued so the customer can reconcile.",
+       "REJECTED": "Reject the request. Please enter the reason — accountant uses it to explain to the customer."
+     },
+     "invoiceNumber": "Invoice number (*)",
+-    "invoiceHint": "If already saved in the \"Accountant\" tab, the system auto-fills — just verify and confirm.",
++    "invoiceHint": "If already saved in the \"Issuance\" tab, the system auto-fills — just verify and confirm.",
+     "invoiceRequired": "Please enter an invoice number",
+     "rejectReason": "Rejection reason (*)",
+     "noteRequired": "Rejection reason must be at least 3 characters",
+     "emailNotice": "System does not auto-send email yet. Please contact customer directly if needed."
+   },
+   "sidebar": {
+     "label": "VAT Management"
+   },
+   "unsavedConfirm": "Unsaved changes. Close anyway?"
+ }
+diff --git a/app/order-ui/src/locales/vi/toast.json b/app/order-ui/src/locales/vi/toast.json
+index f86f5ca..15111ea 100644
+--- a/app/order-ui/src/locales/vi/toast.json
++++ b/app/order-ui/src/locales/vi/toast.json
+@@ -476,16 +476,14 @@
+ 				"qrCreationFailed": "Không thể tạo QR. Vui lòng thử lại.",
+ 				"paymentSuccess": "Thanh toán thành công",
+ 				"cancelOrderSuccess": "Đã huỷ đơn",
+ 				"cancelOrderFailedRetry": "Không thể huỷ đơn. Vui lòng thử lại.",
+ 				"voucherRequiresCustomer": "Voucher này yêu cầu khách hàng. Vui lòng chọn khách trước khi thanh toán.",
+ 				"vatSubmitSuccess": "Đã gửi yêu cầu xuất hoá đơn VAT.",
+ 				"vatSubmitFailed": "Gửi yêu cầu VAT thất bại. Vui lòng thử lại.",
+ 				"vatRequestNotFound": "Không tìm thấy yêu cầu VAT.",
+ 				"vatRequestAlreadyExists": "Yêu cầu VAT cho đơn này đã tồn tại.",
+ 				"vatAlreadySubmitted": "Yêu cầu VAT cho đơn này đã được gửi.",
+-				"vatAccountantUpdateSuccess": "Cập nhật thông tin kế toán thành công.",
+-				"vatAccountantUpdateFailed": "Cập nhật thông tin kế toán thất bại.",
+ 				"vatStatusUpdated": "Chuyển trạng thái thành công.",
+ 				"vatStatusUpdateFailed": "Chuyển trạng thái thất bại."
+ 			}
+ 		}
+\ No newline at end of file
+diff --git a/app/order-ui/src/locales/vi/vatAdmin.json b/app/order-ui/src/locales/vi/vatAdmin.json
+index ef04b65..4286d3f 100644
+--- a/app/order-ui/src/locales/vi/vatAdmin.json
++++ b/app/order-ui/src/locales/vi/vatAdmin.json
+@@ -37,67 +37,64 @@
+     "email": "Email",
+     "companyName": "Tên công ty (nếu có)",
+     "note": "Ghi chú",
+     "save": "Lưu thay đổi",
+     "saveSuccess": "Cập nhật thông tin khách hàng thành công",
+     "saveFailed": "Cập nhật thất bại",
+     "confirmTitle": "Cập nhật thông tin khách hàng",
+     "confirmDescription": "Xác nhận cập nhật thông tin khách hàng cho yêu cầu xuất hoá đơn VAT này?"
+   },
+   "accountantInfo": {
+-    "title": "KẾ TOÁN INFO",
+-    "invoiceNumber": "Số hoá đơn",
+-    "note": "Ghi chú nội bộ",
+-    "save": "Lưu",
+-    "confirmTitle": "Cập nhật thông tin kế toán",
+-    "confirmDescription": "Xác nhận cập nhật số hoá đơn / ghi chú nội bộ cho yêu cầu này?"
++    "invoiceNumber": "Số hoá đơn"
+   },
+   "workflow": {
+     "title": "WORKFLOW STATUS",
+     "current": "Hiện tại",
+     "transitionTo": {
++      "PENDING": "Quay về chờ",
+       "PROCESSING": "Bắt đầu xử lý",
+       "COMPLETED": "Hoàn thành",
+       "REJECTED": "Từ chối"
+     }
+   },
+   "detail": {
+     "description": "Quản lý thông tin và trạng thái yêu cầu xuất hoá đơn VAT"
+   },
+   "tabs": {
+     "overview": "Tổng quan",
+-    "customer": "Thông tin khách",
+-    "accountant": "Kế toán"
++    "customer": "Thông tin khách"
+   },
+   "overview": {
+     "invoice": "HOÁ ĐƠN GỐC",
+     "customer": "THÔNG TIN KHÁCH",
+-    "accountant": "KẾ TOÁN",
++    "accountant": "PHÁT HÀNH HOÁ ĐƠN",
+     "tableName": "Bàn",
+     "cashier": "Thu ngân",
+     "invoiceDate": "Thời gian đặt",
+     "requestedAt": "Ngày yêu cầu",
+     "companyName": "Công ty"
+   },
+   "transition": {
+     "title": {
++      "PENDING": "Quay về Đang chờ?",
+       "PROCESSING": "Bắt đầu xử lý?",
+       "COMPLETED": "Chuyển sang HOÀN THÀNH?",
+       "REJECTED": "Từ chối yêu cầu này?"
+     },
+     "description": {
++      "PENDING": "Đưa yêu cầu này về trạng thái chờ xử lý. Dùng khi cần làm lại từ đầu.",
+       "PROCESSING": "Đánh dấu đơn này đang được xử lý. Khách không nhận thông báo ở bước này.",
+       "COMPLETED": "Hoàn tất xuất hoá đơn. Nhập số hoá đơn thực tế đã phát hành để khách đối chiếu.",
+       "REJECTED": "Từ chối yêu cầu. Vui lòng nhập lý do — kế toán dùng để giải thích với khách."
+     },
+     "invoiceNumber": "Số hoá đơn (*)",
+-    "invoiceHint": "Nếu đã lưu sẵn ở tab \"Kế toán\" thì hệ thống tự điền — chỉ cần kiểm tra rồi xác nhận.",
++    "invoiceHint": "Nếu đã lưu sẵn ở tab \"Phát hành HĐ\" thì hệ thống tự điền — chỉ cần kiểm tra rồi xác nhận.",
+     "invoiceRequired": "Vui lòng nhập số hoá đơn",
+     "rejectReason": "Lý do từ chối (*)",
+     "noteRequired": "Lý do từ chối tối thiểu 3 ký tự",
+     "emailNotice": "Hệ thống tạm thời chưa tự gửi email cho khách. Vui lòng liên hệ trực tiếp nếu cần."
+   },
+   "sidebar": {
+     "label": "Quản lý VAT"
+   },
+   "unsavedConfirm": "Có thay đổi chưa lưu. Đóng?"
+ }
+diff --git a/app/order-ui/src/schemas/vat-admin.schema.ts b/app/order-ui/src/schemas/vat-admin.schema.ts
+index a2a3348..1135514 100644
+--- a/app/order-ui/src/schemas/vat-admin.schema.ts
++++ b/app/order-ui/src/schemas/vat-admin.schema.ts
+@@ -5,36 +5,35 @@ const taxCodeRegex = /^(\d{10}|\d{13})$/
+ 
+ export const vatUpdateCustomerSchema = z.object({
+   customerName: z.string().min(1).optional(),
+   taxCode: z.string().regex(taxCodeRegex).optional(),
+   address: z.string().min(1).optional(),
+   email: z.string().email().optional(),
+   companyName: z.string().optional(),
+   note: z.string().optional(),
+ })
+ 
+-export const vatUpdateAccountantSchema = z.object({
+-  invoiceNumber: z.string().optional(),
+-  accountantNote: z.string().optional(),
+-})
+-
+ export const vatStatusTransitionSchema = z.discriminatedUnion('status', [
++  z.object({
++    status: z.literal(VatRequestStatus.PENDING),
++    invoiceNumber: z.string().optional(),
++    note: z.string().optional(),
++  }),
+   z.object({
+     status: z.literal(VatRequestStatus.PROCESSING),
+     invoiceNumber: z.string().optional(),
+     note: z.string().optional(),
+   }),
+   z.object({
+     status: z.literal(VatRequestStatus.COMPLETED),
+     invoiceNumber: z.string().min(1),
+     note: z.string().optional(),
+   }),
+   z.object({
+     status: z.literal(VatRequestStatus.REJECTED),
+     invoiceNumber: z.string().optional(),
+     note: z.string().min(3),
+   }),
+ ])
+ 
+ export type TVatUpdateCustomer = z.infer<typeof vatUpdateCustomerSchema>
+-export type TVatUpdateAccountant = z.infer<typeof vatUpdateAccountantSchema>
+ export type TVatStatusTransition = z.infer<typeof vatStatusTransitionSchema>
+diff --git a/app/order-ui/src/tests/app/system/vat-request/page.test.tsx b/app/order-ui/src/tests/app/system/vat-request/page.test.tsx
+index a6ba152..a0cfd97 100644
+--- a/app/order-ui/src/tests/app/system/vat-request/page.test.tsx
++++ b/app/order-ui/src/tests/app/system/vat-request/page.test.tsx
+@@ -9,21 +9,20 @@ vi.mock('@/hooks/use-vat-admin', () => ({
+   useVatRequests: () => ({
+     data: { items: [], total: 0, page: 1, size: 20 },
+     isLoading: false,
+     isFetching: false,
+     refetch: vi.fn(),
+     dataUpdatedAt: Date.now(),
+   }),
+   useHasVatPermission: () => ({
+     canView: true,
+     canEdit: true,
+-    canEditAccountant: true,
+     canUpdateStatus: true,
+   }),
+ }))
+ 
+ function wrapper({ children }: { children: ReactNode }) {
+   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+   return (
+     <BrowserRouter>
+       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+     </BrowserRouter>
+diff --git a/app/order-ui/src/tests/components/dialog/status-transition-confirm-dialog.test.tsx b/app/order-ui/src/tests/components/dialog/status-transition-confirm-dialog.test.tsx
+index 873d1f9..d3838ef 100644
+--- a/app/order-ui/src/tests/components/dialog/status-transition-confirm-dialog.test.tsx
++++ b/app/order-ui/src/tests/components/dialog/status-transition-confirm-dialog.test.tsx
+@@ -89,11 +89,61 @@ describe('StatusTransitionConfirmDialog', () => {
+       <StatusTransitionConfirmDialog
+         open={true}
+         vatRequest={sample}
+         targetStatus={VatRequestStatus.COMPLETED}
+         onClose={vi.fn()}
+         onConfirmed={vi.fn()}
+       />,
+     )
+     expect(screen.getByTestId('vat-transition-email-notice')).toBeInTheDocument()
+   })
++
++  it('renders PENDING target dialog without invoice or note inputs', () => {
++    mutate.mockReset()
++    render(
++      <StatusTransitionConfirmDialog
++        open={true}
++        vatRequest={sample}
++        targetStatus={VatRequestStatus.PENDING}
++        onClose={vi.fn()}
++        onConfirmed={vi.fn()}
++      />,
++    )
++    // No required fields for PENDING rollback
++    expect(screen.queryByTestId('vat-transition-invoice')).not.toBeInTheDocument()
++    expect(screen.queryByTestId('vat-transition-note')).not.toBeInTheDocument()
++    // Confirm button present
++    expect(screen.getByTestId('vat-transition-confirm')).toBeInTheDocument()
++  })
++
++  it('submits valid PENDING payload without required fields', async () => {
++    mutate.mockReset()
++    mutate.mockImplementation((_, callbacks) => {
++      callbacks?.onSuccess?.({
++        statusCode: 200,
++        message: '',
++        result: { slug: 'VAT-1', status: VatRequestStatus.PENDING },
++      })
++    })
++    render(
++      <StatusTransitionConfirmDialog
++        open={true}
++        vatRequest={sample}
++        targetStatus={VatRequestStatus.PENDING}
++        onClose={vi.fn()}
++        onConfirmed={vi.fn()}
++      />,
++    )
++    fireEvent.click(screen.getByTestId('vat-transition-confirm'))
++    await waitFor(() => {
++      expect(mutate).toHaveBeenCalledWith(
++        expect.objectContaining({
++          slug: 'VAT-1',
++          body: expect.objectContaining({
++            status: VatRequestStatus.PENDING,
++          }),
++        }),
++        expect.any(Object),
++      )
++    })
++  })
+ })
+diff --git a/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/accountant-info-section.test.tsx b/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/accountant-info-section.test.tsx
+deleted file mode 100644
+index 0bc919b..0000000
+--- a/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/accountant-info-section.test.tsx
++++ /dev/null
+@@ -1,63 +0,0 @@
+-import { describe, it, expect, vi } from 'vitest'
+-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+-import { AccountantInfoSection } from '@/components/app/sheet/vat-request-detail-sheet/accountant-info-section'
+-import { VatRequestStatus } from '@/types'
+-
+-const mutate = vi.fn()
+-vi.mock('@/hooks/use-vat-admin', () => ({
+-  useUpdateAccountantInfo: () => ({ mutate, isPending: false }),
+-}))
+-
+-const sample = {
+-  slug: 'VAT-1',
+-  invoiceSlug: 'INV-1',
+-  customerName: 'Co A',
+-  taxCode: '0123456789',
+-  email: 'a@x.com',
+-  status: VatRequestStatus.COMPLETED, // terminal — should still be editable
+-  invoiceNumber: 'HD-001',
+-  accountantNote: 'note',
+-  createdAt: '2026-06-26T10:00:00.000Z',
+-}
+-
+-describe('AccountantInfoSection', () => {
+-  it('is editable even when status is COMPLETED (terminal)', () => {
+-    render(
+-      <AccountantInfoSection
+-        vatRequest={sample as never}
+-        isLocked={false}
+-        onUpdated={vi.fn()}
+-      />,
+-    )
+-    expect(screen.getByTestId('vat-accountant-invoice-number')).not.toBeDisabled()
+-    expect(screen.getByTestId('vat-accountant-save')).toBeInTheDocument()
+-  })
+-
+-  it('opens confirm dialog on save → submits invoiceNumber after confirm', async () => {
+-    mutate.mockReset()
+-    render(
+-      <AccountantInfoSection
+-        vatRequest={sample as never}
+-        isLocked={false}
+-        onUpdated={vi.fn()}
+-      />,
+-    )
+-    fireEvent.change(screen.getByTestId('vat-accountant-invoice-number'), {
+-      target: { value: 'HD-002' },
+-    })
+-    fireEvent.click(screen.getByTestId('vat-accountant-save'))
+-    // Confirm dialog opens; mutation gated.
+-    const confirmBtn = await screen.findByTestId('vat-confirm-update')
+-    expect(mutate).not.toHaveBeenCalled()
+-    fireEvent.click(confirmBtn)
+-    await waitFor(() => {
+-      expect(mutate).toHaveBeenCalledWith(
+-        expect.objectContaining({
+-          slug: 'VAT-1',
+-          body: expect.objectContaining({ invoiceNumber: 'HD-002' }),
+-        }),
+-        expect.any(Object),
+-      )
+-    })
+-  })
+-})
+diff --git a/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/vat-request-detail-sheet.test.tsx b/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/vat-request-detail-sheet.test.tsx
+index 01dc71c..2fc8494 100644
+--- a/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/vat-request-detail-sheet.test.tsx
++++ b/app/order-ui/src/tests/components/sheet/vat-request-detail-sheet/vat-request-detail-sheet.test.tsx
+@@ -2,25 +2,23 @@ import { describe, it, expect, vi } from 'vitest'
+ import { render, screen } from '@testing-library/react'
+ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+ import type { ReactNode } from 'react'
+ import { VatRequestDetailSheet } from '@/components/app/sheet/vat-request-detail-sheet'
+ import { VatRequestStatus } from '@/types'
+ 
+ vi.mock('@/hooks/use-vat-admin', () => ({
+   useHasVatPermission: () => ({
+     canView: true,
+     canEdit: true,
+-    canEditAccountant: true,
+     canUpdateStatus: true,
+   }),
+   useUpdateVatRequest: () => ({ mutate: vi.fn(), isPending: false }),
+-  useUpdateAccountantInfo: () => ({ mutate: vi.fn(), isPending: false }),
+   useUpdateVatStatus: () => ({ mutate: vi.fn(), isPending: false }),
+ }))
+ 
+ const sample = {
+   slug: 'VAT-1',
+   customerName: 'Co A',
+   taxCode: '0123456789',
+   email: 'a@x.com',
+   address: '123',
+   status: VatRequestStatus.PENDING,
+@@ -49,31 +47,61 @@ describe('VatRequestDetailSheet', () => {
+   it('renders header with reference # + status badge when vatRequest provided', () => {
+     render(<VatRequestDetailSheet vatRequest={sample as never} onClose={vi.fn()} />, {
+       wrapper,
+     })
+     expect(screen.getByTestId('vat-detail-sheet')).toBeInTheDocument()
+     // #544 appears in SheetTitle header + Overview tab body; assertion picks both as OK.
+     expect(screen.getAllByText('#544').length).toBeGreaterThan(0)
+     expect(screen.getByTestId('vat-status-badge-PENDING')).toBeInTheDocument()
+   })
+ 
+-  it('renders 3 tabs (overview/customer/accountant)', () => {
++  it('renders 2 tabs (overview/customer)', () => {
+     render(<VatRequestDetailSheet vatRequest={sample as never} onClose={vi.fn()} />, {
+       wrapper,
+     })
+     expect(screen.getByTestId('vat-tab-overview')).toBeInTheDocument()
+     expect(screen.getByTestId('vat-tab-customer')).toBeInTheDocument()
+-    expect(screen.getByTestId('vat-tab-accountant')).toBeInTheDocument()
++    expect(screen.queryByTestId('vat-tab-accountant')).not.toBeInTheDocument()
+     // Default tab: overview content visible.
+     expect(screen.getByTestId('vat-overview-tab')).toBeInTheDocument()
+   })
+ 
+-  it('renders footer with workflow transition buttons + close', () => {
++  it('renders footer with workflow transition buttons + close (from PENDING)', () => {
+     render(<VatRequestDetailSheet vatRequest={sample as never} onClose={vi.fn()} />, {
+       wrapper,
+     })
+     expect(screen.getByTestId('vat-detail-footer')).toBeInTheDocument()
++    // PENDING button hidden (same-status block); others visible
++    expect(screen.queryByTestId('vat-transition-PENDING')).not.toBeInTheDocument()
+     expect(screen.getByTestId('vat-transition-PROCESSING')).toBeInTheDocument()
+     expect(screen.getByTestId('vat-transition-COMPLETED')).toBeInTheDocument()
+     expect(screen.getByTestId('vat-transition-REJECTED')).toBeInTheDocument()
+   })
++
++  it('hides all transition buttons when status is COMPLETED (hard terminal)', () => {
++    const terminalSample = { ...sample, status: VatRequestStatus.COMPLETED }
++    render(<VatRequestDetailSheet vatRequest={terminalSample as never} onClose={vi.fn()} />, {
++      wrapper,
++    })
++    // COMPLETED is a hard terminal — no transitions allowed at all.
++    const workflowSection = screen.getByTestId('vat-status-workflow-section')
++    expect(workflowSection.querySelectorAll('button')).toHaveLength(0)
++    expect(screen.queryByTestId('vat-transition-PENDING')).not.toBeInTheDocument()
++    expect(screen.queryByTestId('vat-transition-PROCESSING')).not.toBeInTheDocument()
++    expect(screen.queryByTestId('vat-transition-COMPLETED')).not.toBeInTheDocument()
++    expect(screen.queryByTestId('vat-transition-REJECTED')).not.toBeInTheDocument()
++  })
++
++  it('shows transition buttons from REJECTED (still allowed)', () => {
++    const rejectedSample = { ...sample, status: VatRequestStatus.REJECTED }
++    render(<VatRequestDetailSheet vatRequest={rejectedSample as never} onClose={vi.fn()} />, {
++      wrapper,
++    })
++    // REJECTED can transition to PENDING, PROCESSING, COMPLETED (free transitions).
++    expect(screen.getByTestId('vat-transition-PENDING')).toBeInTheDocument()
++    expect(screen.getByTestId('vat-transition-PROCESSING')).toBeInTheDocument()
++    expect(screen.getByTestId('vat-transition-COMPLETED')).toBeInTheDocument()
++    // REJECTED button hidden (same-status block).
++    expect(screen.queryByTestId('vat-transition-REJECTED')).not.toBeInTheDocument()
++  })
++
+ })
+diff --git a/app/order-ui/src/tests/hooks/use-vat-admin.test.tsx b/app/order-ui/src/tests/hooks/use-vat-admin.test.tsx
+index 2f5f4f4..6471bc6 100644
+--- a/app/order-ui/src/tests/hooks/use-vat-admin.test.tsx
++++ b/app/order-ui/src/tests/hooks/use-vat-admin.test.tsx
+@@ -55,30 +55,28 @@ describe('useUpdateVatRequest', () => {
+   })
+ })
+ 
+ describe('useHasVatPermission', () => {
+   it('returns all-false when token absent', () => {
+     vi.mocked(useAuthStore).mockReturnValue({ token: null } as never)
+     const { result } = renderHook(() => useHasVatPermission(), { wrapper })
+     expect(result.current).toEqual({
+       canView: false,
+       canEdit: false,
+-      canEditAccountant: false,
+       canUpdateStatus: false,
+     })
+   })
+ 
+   it('returns true per code present in JWT scope', () => {
+     // JWT payload encoded later; for now mock by stubbing useAuthStore to
+     // return a token AND override jwtDecode via vi.mock pattern. We assert
+     // the consumer reads `useAuthStore().token` and decodes scope.
+     // (Implementation detail: hook uses jwt-decode like ProtectedElement.)
+     // This test acts as a smoke that the structure exists; deeper decode
+     // logic verified manually + Task 14 integration.
+     vi.mocked(useAuthStore).mockReturnValue({ token: 'fake' } as never)
+     const { result } = renderHook(() => useHasVatPermission(), { wrapper })
+     expect(typeof result.current.canView).toBe('boolean')
+     expect(typeof result.current.canEdit).toBe('boolean')
+-    expect(typeof result.current.canEditAccountant).toBe('boolean')
+     expect(typeof result.current.canUpdateStatus).toBe('boolean')
+   })
+ })
+diff --git a/app/order-ui/src/tests/schemas/vat-admin.test.ts b/app/order-ui/src/tests/schemas/vat-admin.test.ts
+index 5eba589..97d8311 100644
+--- a/app/order-ui/src/tests/schemas/vat-admin.test.ts
++++ b/app/order-ui/src/tests/schemas/vat-admin.test.ts
+@@ -1,14 +1,13 @@
+ import { describe, it, expect } from 'vitest'
+ import {
+   vatUpdateCustomerSchema,
+-  vatUpdateAccountantSchema,
+   vatStatusTransitionSchema,
+ } from '@/schemas/vat-admin.schema'
+ import { VatRequestStatus } from '@/types'
+ 
+ describe('vatUpdateCustomerSchema', () => {
+   it('accepts empty object (all fields optional)', () => {
+     expect(vatUpdateCustomerSchema.safeParse({}).success).toBe(true)
+   })
+ 
+   it('accepts taxCode with 10 digits', () => {
+@@ -25,34 +24,20 @@ describe('vatUpdateCustomerSchema', () => {
+     const r = vatUpdateCustomerSchema.safeParse({ taxCode: '01234567890' })
+     expect(r.success).toBe(false)
+   })
+ 
+   it('rejects malformed email', () => {
+     const r = vatUpdateCustomerSchema.safeParse({ email: 'not-an-email' })
+     expect(r.success).toBe(false)
+   })
+ })
+ 
+-describe('vatUpdateAccountantSchema', () => {
+-  it('accepts empty object', () => {
+-    expect(vatUpdateAccountantSchema.safeParse({}).success).toBe(true)
+-  })
+-
+-  it('accepts both fields populated', () => {
+-    const r = vatUpdateAccountantSchema.safeParse({
+-      invoiceNumber: 'HD-2026-001',
+-      accountantNote: 'verified',
+-    })
+-    expect(r.success).toBe(true)
+-  })
+-})
+-
+ describe('vatStatusTransitionSchema', () => {
+   it('accepts COMPLETED with invoiceNumber', () => {
+     const r = vatStatusTransitionSchema.safeParse({
+       status: VatRequestStatus.COMPLETED,
+       invoiceNumber: 'HD-001',
+     })
+     expect(r.success).toBe(true)
+   })
+ 
+   it('rejects COMPLETED without invoiceNumber', () => {
+@@ -85,17 +70,26 @@ describe('vatStatusTransitionSchema', () => {
+     expect(r.success).toBe(false)
+   })
+ 
+   it('accepts PROCESSING with no required fields', () => {
+     const r = vatStatusTransitionSchema.safeParse({
+       status: VatRequestStatus.PROCESSING,
+     })
+     expect(r.success).toBe(true)
+   })
+ 
+-  it('rejects PENDING as transition target (no revert)', () => {
++  it('accepts PENDING as transition target (free rollback allowed)', () => {
+     const r = vatStatusTransitionSchema.safeParse({
+       status: VatRequestStatus.PENDING,
+     })
+-    expect(r.success).toBe(false)
++    expect(r.success).toBe(true)
++  })
++
++  it('accepts PENDING with optional invoiceNumber and note', () => {
++    const r = vatStatusTransitionSchema.safeParse({
++      status: VatRequestStatus.PENDING,
++      invoiceNumber: 'HD-001',
++      note: 'rollback reason',
++    })
++    expect(r.success).toBe(true)
+   })
+ })
+diff --git a/app/order-ui/src/types/vat.type.ts b/app/order-ui/src/types/vat.type.ts
+index b67318b..ba94b4c 100644
+--- a/app/order-ui/src/types/vat.type.ts
++++ b/app/order-ui/src/types/vat.type.ts
+@@ -60,21 +60,20 @@ export interface IVatInvoiceContext {
+ 
+ export interface IVatRequestListItem {
+   slug: string
+   customerName: string
+   taxCode: string
+   email: string
+   address?: string
+   companyName?: string
+   note?: string
+   invoiceNumber?: string | null
+-  accountantNote?: string | null
+   status: VatRequestStatus
+   createdAt: string
+   updatedAt?: string
+   invoiceId?: string
+   invoice?: IVatInvoiceContext
+ }
+ 
+ export interface IVatRequestListParams {
+   /** BE chỉ accept 1 status per request (không support multi-status filter). */
+   status?: VatRequestStatus
+@@ -94,22 +93,17 @@ export interface IVatRequestListResponse {
+ 
+ export interface IUpdateVatRequestBody {
+   customerName?: string
+   taxCode?: string
+   address?: string
+   email?: string
+   companyName?: string
+   note?: string
+ }
+ 
+-export interface IUpdateAccountantInfoBody {
+-  invoiceNumber?: string
+-  accountantNote?: string
+-}
+-
+ export interface IUpdateVatStatusBody {
+   status: VatRequestStatus
+   /** Null khi chưa có (BE từ chối empty string ""). */
+   invoiceNumber?: string | null
+   /** Null khi không có note. */
+   note?: string | null
+ }
+diff --git a/app/order-ui/src/utils/printer.ts b/app/order-ui/src/utils/printer.ts
+index de34a3a..de27a22 100644
+--- a/app/order-ui/src/utils/printer.ts
++++ b/app/order-ui/src/utils/printer.ts
+@@ -33,22 +33,45 @@ export const openPrintWindow = (htmlContent: string) => {
+   const printWindow = window.open('', '_blank')
+   if (!printWindow) {
+     throw new Error('Không thể mở cửa sổ in')
+   }
+ 
+   // Inject enhanced auto-close script vào HTML content
+   const autoCloseScript = `
+     <script>
+       let printExecuted = false;
+       let closeAttempted = false;
+-      
+-      window.onload = () => {
++
++      // Đợi mọi <img> (đặc biệt data: URL như QR base64) decode xong trước khi
++      // gọi window.print(). Trên Windows Chrome/Edge, window.onload có thể fire
++      // trước khi data-URL image decode xong → preview bị mất ảnh. Mac WebKit
++      // thường catch kịp nhưng vẫn an toàn nếu đợi explicit.
++      const waitForImages = () => {
++        const imgs = Array.from(document.images);
++        return Promise.all(imgs.map((img) => {
++          if (img.complete && img.naturalWidth > 0) {
++            return img.decode ? img.decode().catch(() => {}) : Promise.resolve();
++          }
++          return new Promise((resolve) => {
++            img.addEventListener('load', () => {
++              if (img.decode) img.decode().then(resolve, resolve);
++              else resolve();
++            }, { once: true });
++            img.addEventListener('error', () => resolve(), { once: true });
++          });
++        }));
++      };
++
++      window.onload = async () => {
++        try { await waitForImages(); } catch (_) {}
++        // micro-delay để layout settle sau khi image decoded (Windows render).
++        await new Promise((r) => setTimeout(r, 60));
+         window.print();
+         printExecuted = true;
+       };
+       
+       // Method 1: Standard onafterprint event
+       window.onafterprint = () => {
+         if (!closeAttempted) {
+           closeAttempted = true;
+           setTimeout(() => window.close(), 300);
+         }

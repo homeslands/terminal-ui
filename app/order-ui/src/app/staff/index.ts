@@ -1,0 +1,6 @@
+export { StaffPosLayout } from './layout'
+export { default as StaffFloorPlanPage } from './floor-plan'
+export { default as StaffTableOrderPage } from './table-order'
+export { default as StaffPaymentPage } from './payment'
+export { default as StaffInvoicePage } from './invoice'
+export { default as StaffReceiptPage } from './receipt'
