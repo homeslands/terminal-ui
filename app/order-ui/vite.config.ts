@@ -22,9 +22,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0',
-      port: 5174,
+      port: 5178,
       hmr: {
-        port: 5174,
+        port: 5178,
       },
       proxy: {
         '/api/v1': {

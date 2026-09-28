@@ -2,8 +2,8 @@ name: deploy-dev
 
 on:
   push:
-      branches:
-        - dev
+    branches:
+      - dev
 
 jobs:
   deploy:
@@ -16,17 +16,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Copy Environment Configuration
-        env:
-          ENV_DEV: ${{ secrets.ENV_DEV }}
-        run: |
-          echo "$ENV_DEV" > .deploy/dev/.env
-
       - name: Deploy with Docker Compose
         env:
-          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST_DEV }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER_DEV }}
+          SSH_PORT: ${{ secrets.SSH_PORT_DEV }}
           SSH_PRIVATE_KEY_DEV: ${{ secrets.SSH_PRIVATE_KEY_DEV }}
         run: |
           mkdir -p ~/.ssh
