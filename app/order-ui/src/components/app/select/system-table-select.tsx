@@ -18,7 +18,7 @@ export default function SystemTableSelect({ onSelect }: Props = {}) {
     const { t } = useTranslation(['table'])
     const { getUserInfo } = useUserStore()
     const [_, setSearchParams] = useSearchParams()
-    const { data: tables } = useTables(getUserInfo()?.branch.slug)
+    const { data: tables } = useTables(getUserInfo()?.branch?.slug)
     const [selectedTableId, setSelectedTableId] = useState<string | undefined>(
         undefined,
     )

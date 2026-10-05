@@ -16,7 +16,7 @@ export function SystemChefAreaManagementTabsContent() {
   const authorityGroupCodes = Array.isArray(authorityGroup)
     ? authorityGroup.flatMap(group => group.authorities.map(auth => auth.code))
     : [];
-  const userPermissionCodes = userInfo?.role.permissions.map(p => p.authority.code) ?? [];
+  const userPermissionCodes = (userInfo?.role.permissions ?? []).map(p => p.authority.code);
 
   const isViewPermissionValid = hasPermissionInBoth("VIEW_KITCHEN_AREA", authorityGroupCodes, userPermissionCodes);
   const isDeletePermissionValid = hasPermissionInBoth("DELETE_KITCHEN_AREA", authorityGroupCodes, userPermissionCodes);

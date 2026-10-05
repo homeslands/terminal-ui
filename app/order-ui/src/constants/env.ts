@@ -1,5 +1,10 @@
 export const baseURL = import.meta.env.VITE_BASE_API_URL
 // export const baseURL = import.meta.env.VITE_BASE_API_URL
+// shared-user (identity service, cổng 8086) — client `httpAuth` dùng làm
+// baseURL. Thiếu biến này thì `httpAuth` KHÔNG có baseURL và request rơi vào
+// cùng origin; lỗi chỉ hiện ra ở tận màn đăng nhập. `trend-ui` đã vấp đúng
+// chỗ này (biến bị comment sẵn trong ENV/dev/ui/.env).
+export const authURL = import.meta.env.VITE_AUTH_API_URL
 export const publicFileURL = import.meta.env.VITE_PUBLIC_FILE_URL
 export const googleMapAPIKey = import.meta.env.VITE_GOOGLE_MAP_API_KEY
 export const fanpageUrl = import.meta.env.VITE_TREND_FANPAGE_URL

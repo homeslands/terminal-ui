@@ -17,8 +17,7 @@ import {
 import { DeleteAccountForm } from '../form'
 
 import { ROUTE } from '@/constants'
-import { useDeleteAccount } from '@/hooks'
-import { useAuthStore, useUserStore } from '@/stores'
+import { useDeleteAccount, useSessionCleanup } from '@/hooks'
 import { showToast } from '@/utils'
 import type { IDeleteAccountRequest } from '@/types'
 
@@ -30,8 +29,11 @@ export default function DeleteAccountDialog() {
   const [isWarningExpanded, setIsWarningExpanded] = useState(true)
 
   const { mutate: deleteAccount, isPending } = useDeleteAccount()
-  const setLogout = useAuthStore((s) => s.setLogout)
-  const clearUserData = useUserStore((s) => s.clearUserData)
+  // DÙNG CHUNG với `logout-dialog`. Bản trước ở đây chỉ gọi `setLogout()` +
+  // `clearUserData()`, tức xoá tài khoản xong thiết bị VẪN đăng ký nhận push
+  // cho một danh tính không còn tồn tại bên `shared-user`, và giỏ hàng / chi
+  // nhánh / ca của người vừa xoá còn nguyên cho người dùng máy tiếp theo.
+  const cleanupSession = useSessionCleanup()
   const navigate = useNavigate()
 
   const isConfirmValid = confirmText === 'DELETE'
@@ -57,10 +59,9 @@ export default function DeleteAccountDialog() {
 
   const onSubmit = (values: IDeleteAccountRequest) => {
     deleteAccount(values, {
-      onSuccess: () => {
+      onSuccess: async () => {
         showToast(t('profile.deleteAccount.successMessage'))
-        setLogout()
-        clearUserData()
+        await cleanupSession()
         navigate(ROUTE.LOGIN)
         handleClose()
       }

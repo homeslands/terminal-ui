@@ -1,6 +1,6 @@
-import { httpMock } from '../__mocks__/httpMock'
+import { httpAuthMock, httpMock } from '../__mocks__/httpMock'
 import { describe, it, expect, beforeEach, vi, Mock } from 'vitest'
-import { http } from '@/utils'
+import { http, httpAuth } from '@/utils'
 import {
   getProfile,
   updateProfile,
@@ -12,6 +12,7 @@ import { Role } from '@/constants/role'
 
 vi.mock('@/utils', () => ({
   http: httpMock,
+  httpAuth: httpAuthMock,
 }))
 
 describe('Profile API', () => {
@@ -75,10 +76,10 @@ describe('Profile API', () => {
           ...updateData,
         },
       }
-      ;(http.patch as Mock).mockResolvedValue(mockResponse)
+      ;(httpAuth.patch as Mock).mockResolvedValue(mockResponse)
 
       const result = await updateProfile(updateData)
-      expect(http.patch).toHaveBeenCalledWith('/auth/profile', updateData)
+      expect(httpAuth.patch).toHaveBeenCalledWith('/auth/profile', updateData)
       expect(result).toEqual(mockResponse.data)
     })
 
@@ -89,7 +90,7 @@ describe('Profile API', () => {
           data: { message: 'Invalid profile data' },
         },
       }
-      ;(http.patch as Mock).mockRejectedValue(mockError)
+      ;(httpAuth.patch as Mock).mockRejectedValue(mockError)
       await expect(updateProfile(updateData)).rejects.toEqual(mockError)
     })
   })
@@ -106,10 +107,10 @@ describe('Profile API', () => {
           message: 'Password updated successfully',
         },
       }
-      ;(http.post as Mock).mockResolvedValue(mockResponse)
+      ;(httpAuth.post as Mock).mockResolvedValue(mockResponse)
 
       const result = await updatePassword(passwordData)
-      expect(http.post).toHaveBeenCalledWith(
+      expect(httpAuth.post).toHaveBeenCalledWith(
         '/auth/change-password',
         passwordData,
       )
@@ -123,7 +124,7 @@ describe('Profile API', () => {
           data: { message: 'Incorrect old password' },
         },
       }
-      ;(http.post as Mock).mockRejectedValue(mockError)
+      ;(httpAuth.post as Mock).mockRejectedValue(mockError)
       await expect(updatePassword(passwordData)).rejects.toEqual(mockError)
     })
   })
@@ -137,10 +138,10 @@ describe('Profile API', () => {
           image: 'new-profile-picture.jpg',
         },
       }
-      ;(http.patch as Mock).mockResolvedValue(mockResponse)
+      ;(httpAuth.patch as Mock).mockResolvedValue(mockResponse)
 
       const result = await uploadProfilePicture(mockFile)
-      expect(http.patch).toHaveBeenCalledWith(
+      expect(httpAuth.patch).toHaveBeenCalledWith(
         '/auth/upload',
         expect.any(FormData),
       )
@@ -155,13 +156,13 @@ describe('Profile API', () => {
           data: { message: 'Invalid file format' },
         },
       }
-      ;(http.patch as Mock).mockRejectedValue(mockError)
+      ;(httpAuth.patch as Mock).mockRejectedValue(mockError)
       await expect(uploadProfilePicture(mockFile)).rejects.toEqual(mockError)
     })
 
     it('should handle server error during upload', async () => {
       const mockFile = new File(['test'], 'profile.jpg', { type: 'image/jpeg' })
-      ;(http.patch as Mock).mockRejectedValue(SERVER_ERROR)
+      ;(httpAuth.patch as Mock).mockRejectedValue(SERVER_ERROR)
       await expect(uploadProfilePicture(mockFile)).rejects.toEqual(SERVER_ERROR)
     })
   })

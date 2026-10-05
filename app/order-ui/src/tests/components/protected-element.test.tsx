@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import { jwtDecode } from 'jwt-decode'
 
+import { usePermissionsStatus } from '@/hooks'
 import { Role } from '@/constants/role'
 import { ROUTE } from '@/constants/route'
 import {
@@ -29,8 +29,11 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
 
-vi.mock('jwt-decode', () => ({
-  jwtDecode: vi.fn(),
+// Quyền không còn decode từ JWT (token do shared-user ký không mang `scope`) —
+// nay lấy qua `usePermissionsStatus()` (`GET {terminal}/auth/scope`). Mock hook
+// thay vì `jwt-decode`, và mock luôn để khỏi phải dựng QueryClientProvider.
+vi.mock('@/hooks', () => ({
+  usePermissionsStatus: vi.fn(),
 }))
 
 vi.mock('@/stores', () => ({
@@ -79,12 +82,16 @@ beforeEach(() => {
 
   // Non-empty permissions that do NOT include anything for the work-shift
   // route (which has no `permission` at all) — this ensures we're testing
-  // the role-gated branch, not accidentally passing via an empty-token
+  // the role-gated branch, not accidentally passing via an empty-permissions
   // shortcut earlier in the function.
-  vi.mocked(jwtDecode).mockReturnValue({
-    scope: { role: 'CASHIER', permissions: ['SOME_OTHER_PERMISSION'] },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any)
+  //
+  // `isLoading: false` cũng load-bearing: khi đang tải scope thì
+  // `hasPermissionForRoute` trả 'loading' và component hiện spinner, nên
+  // assertion về nội dung sẽ không bao giờ đúng.
+  vi.mocked(usePermissionsStatus).mockReturnValue({
+    permissions: ['SOME_OTHER_PERMISSION'],
+    isLoading: false,
+  })
 })
 
 describe('ProtectedElement — /system/work-shifts routing (C1 regression)', () => {

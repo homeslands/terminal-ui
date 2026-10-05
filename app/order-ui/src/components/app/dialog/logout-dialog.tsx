@@ -13,28 +13,21 @@ import {
   Button,
   DialogFooter,
 } from '@/components/ui'
-import { useAuthStore, useBranchStore, useCartItemStore, useMenuFilterStore, useMenuItemStore, useSelectedChefOrderStore, useUserStore } from '@/stores'
+import { useUserStore } from '@/stores'
 import { showToast } from '@/utils'
 import { ROUTE, Role } from '@/constants'
-import { useOrderFlowStore } from '@/stores'
-import { unregisterDeviceToken } from '@/api/notification'
-import { tokenRegistrationQueue } from '@/services/token-registration-queue'
-import { fcmTokenManager } from '@/services/fcm-token-manager'
-import { useCurrentWorkShift } from '@/hooks'
+import { useCurrentWorkShift, useSessionCleanup } from '@/hooks'
 
 export default function LogoutDialog() {
   const { t } = useTranslation(['auth'])
   const { t: tToast } = useTranslation('toast')
   const [isOpen, setIsOpen] = useState(false)
-  const { setLogout } = useAuthStore()
-  const { clearSelectedChefOrder } = useSelectedChefOrderStore()
-  const { removeBranch } = useBranchStore()
-
-  const { clearAllData } = useOrderFlowStore()
-  const { clearCart } = useCartItemStore()
-  const { clearMenuItems } = useMenuItemStore()
-  const { removeUserInfo, clearUserData, setDeviceToken, getDeviceToken, userInfo } = useUserStore()
-  const { clearMenuFilter } = useMenuFilterStore()
+  // Phần dọn phiên nằm ở `useSessionCleanup` — DÙNG CHUNG với
+  // `delete-account-dialog`. Hai luồng phải dọn giống hệt nhau, nếu không
+  // thiết bị còn nhận push cho tài khoản đã rời đi và giỏ hàng của người
+  // trước còn lại cho người sau trên cùng máy.
+  const cleanupSession = useSessionCleanup()
+  const { userInfo } = useUserStore()
   const navigate = useNavigate()
 
   const isCashier = userInfo?.role?.name === Role.CASHIER
@@ -42,28 +35,7 @@ export default function LogoutDialog() {
   const hasActiveShift = isCashier && !!shift
 
   const handleLogout = async () => {
-    const deviceToken = getDeviceToken()
-    if (deviceToken) {
-      await unregisterDeviceToken(deviceToken)
-    }
-    
-    // Cleanup notification system
-    tokenRegistrationQueue.clearQueue()
-    fcmTokenManager.stopScheduler()
-    
-    // ✅ Clear timestamp (deviceToken được clear bởi clearUserData())
-    localStorage.removeItem('fcm_token_registered_at')
-    
-    setLogout()
-    removeUserInfo()
-    clearUserData()
-    removeBranch()
-    clearCart()
-    clearAllData()
-    clearMenuItems()
-    clearSelectedChefOrder()
-    clearMenuFilter()
-    setDeviceToken('')
+    await cleanupSession()
     navigate(ROUTE.HOME, { replace: true })
     showToast(tToast('toast.logoutSuccess'))
   }
