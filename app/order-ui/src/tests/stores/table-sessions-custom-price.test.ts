@@ -2,12 +2,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useTableSessionsStore } from '@/stores/table-sessions.store'
 import type { OrderItem } from '@/types/session'
 
-vi.mock('@/utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/utils')>()
+// Store nay nhap thang `@/utils/toast` (khong qua barrel) de tranh vong import
+// `http.ts` -> `http-auth.ts`, nen phai mock DUNG module do.
+vi.mock('@/utils/toast', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/toast')>()
   return { ...actual, showErrorToastMessage: vi.fn() }
 })
 
-import { showErrorToastMessage } from '@/utils'
+import { showErrorToastMessage } from '@/utils/toast'
 
 const tableId = 't1'
 

@@ -3,7 +3,12 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import i18next from 'i18next'
 import moment from 'moment'
 
-import { showToast, showErrorToastMessage } from '@/utils'
+// ⚠️ Import từ MODULE CỤ THỂ, không qua barrel `@/utils` — cùng lý do đã ghi ở
+// `auth.store.ts`: `@/utils` → `./http` → `@/stores` → store này → `@/utils` là
+// một vòng tròn. Từ giai đoạn 1 barrel có thêm `./http-auth` ngay sau `./http`,
+// nên đi vào vòng qua barrel thì `attachAuthInterceptors` (khai ở cuối `http.ts`)
+// chưa tồn tại ⇒ `TypeError: attachAuthInterceptors is not a function` lúc import.
+import { showToast, showErrorToastMessage } from '@/utils/toast'
 import {
   ICartItem,
   ICartItemStore,

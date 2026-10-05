@@ -2,14 +2,13 @@ import { useCallback, useEffect, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { jwtDecode } from 'jwt-decode'
 
 import { ROUTE } from '@/constants'
 import { sidebarRoutes } from '@/router/routes'
 import { useAuthStore, useCartItemStore, useCurrentUrlStore, useUserStore } from '@/stores'
 import { Role } from '@/constants/role'
 import { showToast, safeNavigate, isValidRedirectUrl } from '@/utils'
-import { IToken } from '@/types'
+import { usePermissionsStatus } from '@/hooks'
 
 interface ProtectedElementProps {
   element: ReactNode
@@ -41,20 +40,13 @@ export default function ProtectedElement({
   // Reactive check: component re-renders when userInfo changes
   const isAuthDataLoading = userInfo === null
 
-  // Helper: Extract permissions từ token với caching
-  const tokenPermissions = useMemo(() => {
-    if (!token) return []
-
-    try {
-      const decoded: IToken = jwtDecode(token)
-      if (!decoded.scope) return []
-
-      const scope = typeof decoded.scope === "string" ? JSON.parse(decoded.scope) : decoded.scope
-      return scope.permissions || []
-    } catch {
-      return []
-    }
-  }, [token])
+  // Tách "chưa lấy xong quyền" khỏi "không có quyền": gộp hai cái này lại là
+  // nguyên nhân lỗi 403 mỗi lần F5 (xem chú thích trong use-permissions.ts).
+  //
+  // Bản cũ decode `jwtDecode(token).scope` — token do shared-user ký không còn
+  // field đó, nên nó luôn trả mảng rỗng mà không ném lỗi.
+  const { permissions: tokenPermissions, isLoading: isScopeLoading } =
+    usePermissionsStatus()
 
   // Helper: Các route không cần kiểm tra permission đặc biệt
   const publicStaffRoutes = useMemo(() => [
@@ -124,13 +116,23 @@ export default function ProtectedElement({
       return true;
     }
 
-    // 5. Kiểm tra permission cho các route khác
+    // 5. Chưa lấy xong scope thì CHƯA kết luận được.
+    // Sau mỗi lần F5, cache của react-query rỗng nên `tokenPermissions` là []
+    // trong khoảnh khắc đầu tiên. Nếu coi đó là "không có quyền" thì mọi vai trò
+    // khác Customer đều bị đá sang trang 403 ngay khi tải lại trang — đúng lỗi
+    // tester ghi ngày 03/09/2026 ở `trend-ui`. Customer không dính vì nhánh 3 ở
+    // trên đã trả về trước, không đọc tới permissions.
+    if (isScopeLoading) {
+      return 'loading';
+    }
+
+    // 6. Kiểm tra permission cho các route khác
     if (tokenPermissions.length === 0) {
-      // Nếu không có permissions trong token, chỉ cho phép public routes
+      // Đã lấy xong scope mà vẫn rỗng ⇒ thật sự không có quyền nào
       return false;
     }
 
-    // 6. Tìm route config tương ứng
+    // 7. Tìm route config tương ứng
     const route = sidebarRoutes.find(route => pathname.includes(route.path));
 
     if (!route) {
@@ -139,7 +141,7 @@ export default function ProtectedElement({
       return true;
     }
 
-    // 7. Kiểm tra permission cụ thể
+    // 8. Kiểm tra permission cụ thể
     // Role-gated routes (allowedRoles, no scope permission) have already been
     // validated by the allowlist gate above — no permission lookup applies.
     if (!route.permission) {
@@ -153,6 +155,7 @@ export default function ProtectedElement({
     token,
     userInfo,
     isPublicStaffRoute,
+    isScopeLoading,
     tokenPermissions,
     allowedRoles
   ])
@@ -192,6 +195,16 @@ export default function ProtectedElement({
     shouldUpdateUrl,
     t
   ])
+
+  // Hiển thị loading khi chưa lấy xong quyền: chưa biết được người này có được
+  // vào hay không, render nội dung ra rồi mới đá đi sẽ loé trang cấm.
+  if (isScopeLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="w-8 h-8 rounded-full border-b-2 animate-spin border-primary"></div>
+      </div>
+    )
+  }
 
   // Hiển thị loading khi đang load userInfo sau khi có token
   if (isAuthDataLoading) {

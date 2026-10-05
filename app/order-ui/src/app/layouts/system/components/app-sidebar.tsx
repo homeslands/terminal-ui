@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { ChevronRight, House, Sparkles } from 'lucide-react'
 import { useLocation, NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { jwtDecode } from "jwt-decode";
 
 import { useSidebar } from '@/components/ui'
 import {
@@ -29,12 +28,11 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
 } from '@/components/ui'
-import { useAuthStore, useUserStore } from '@/stores'
+import { useUserStore } from '@/stores'
 import { sidebarRoutes } from '@/router/routes'
-import { IToken } from '@/types'
 import { cn } from '@/lib'
 import { NotificationMessageCode, Role, ROUTE } from '@/constants'
-import { useNotification, usePagination } from '@/hooks';
+import { useNotification, usePagination, usePermissionsStatus } from '@/hooks';
 import { TerminalLogo } from '@/assets/images'
 
 export function AppSidebar() {
@@ -43,9 +41,10 @@ export function AppSidebar() {
   const { userInfo } = useUserStore()
   const currentRole = userInfo?.role?.name
   const { state, toggleSidebar } = useSidebar()
-  const authStore = useAuthStore.getState()
-  const { token } = authStore
-  const decoded: IToken = jwtDecode(token || '');
+  // Quyền lấy qua `GET {terminal}/auth/scope`, không decode từ token (token do
+  // shared-user ký không còn field `scope`). Dùng bản có `isLoading` để phân
+  // biệt "chưa biết quyền" với "không có quyền nào" — xem `filteredRoutes`.
+  const { permissions, isLoading: isScopeLoading } = usePermissionsStatus()
   const { pagination } = usePagination()
   const {
     data: notificationsData
@@ -127,9 +126,10 @@ export function AppSidebar() {
 
   // Filter routes by permission
   const filteredRoutes = useMemo(() => {
-    if (!decoded.scope) return []
-    const scope = typeof decoded.scope === "string" ? JSON.parse(decoded.scope) : decoded.scope;
-    const permissions = scope.permissions || [];
+    // Chưa lấy xong scope ⇒ trả rỗng để hiện khung xương bên dưới, KHÔNG hiện
+    // sidebar đã lọc bằng một mảng quyền rỗng (nhìn ra giống "không có quyền
+    // nào" và người dùng thấy menu trống hẳn).
+    if (isScopeLoading) return []
 
     return updatedRoutes.filter((route) => {
       // Permission-gated routes: show only when the user's scope includes it.
@@ -138,7 +138,7 @@ export function AppSidebar() {
       // filter in `updatedRoutes` — let them through here.
       return Boolean(route.allowedRoles && route.allowedRoles.length > 0)
     })
-  }, [updatedRoutes, decoded])
+  }, [updatedRoutes, permissions, isScopeLoading])
 
   return (
     <Sidebar
@@ -175,6 +175,18 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent className="overflow-x-auto custom-scroll scroll-smooth">
         <SidebarGroup>
+          {/* Trong lúc chờ `/auth/scope` trả về: hiện KHUNG XƯƠNG, không hiện
+              sidebar trống. Sidebar trống nhìn ra giống "tài khoản này không có
+              quyền gì", còn khung xương nói đúng sự thật là "đang tải". */}
+          {isScopeLoading ? (
+            <SidebarMenu>
+              {[0, 1, 2, 3, 4].map((i) => (
+                <SidebarMenuItem key={i}>
+                  <div className="mx-2 my-1 h-8 animate-pulse rounded-md bg-muted" />
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          ) : (
           <SidebarMenu>
             {filteredRoutes.map((item) => (
               <Collapsible key={item.title} asChild defaultOpen={item.isActive}>
@@ -257,6 +269,7 @@ export function AppSidebar() {
               </Collapsible>
             ))}
           </SidebarMenu>
+          )}
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>

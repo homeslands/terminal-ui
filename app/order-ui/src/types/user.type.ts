@@ -13,6 +13,20 @@ export enum UserStatisticsGroupBy {
 }
 
 
+/**
+ * Người nhận thẻ quà, trả về từ `GET {terminal}/user/lookup-recipient`.
+ *
+ * Cố ý **HẸP hơn `IUserInfo`**: backend chỉ trả đúng bốn field này. Đừng mở
+ * rộng nó ra thành `IUserInfo` — màn KHÁCH không được thấy email / dob /
+ * address / role / điểm / ví của người khác. Đó là cả lý do route này tồn tại.
+ */
+export interface IGiftCardRecipient {
+  slug: string
+  phonenumber: string
+  firstName?: string
+  lastName?: string
+}
+
 export interface IUserInfo {
   slug: string
   image?: string
@@ -47,13 +61,31 @@ export interface IUserInfo {
     slug: string
     name: string
     address: string
-  }
+  } | null
   role: {
     name: Role
     slug: string
     createdAt: string
     description: string
-    permissions: IPermission[]
+    // OPTIONAL từ giai đoạn 1. `terminal` VẪN trả field này (khác `trend`, xem
+    // ghi chú tại `AuthService.getProfile`) — đánh optional là để ba nơi tiêu
+    // thụ nó buộc phải null-safe NGAY BÂY GIỜ, để ngày nó thật sự bị bỏ thì
+    // không chỗ nào nổ:
+    //
+    //   app/system/chef-area/page.tsx
+    //   app/system/order-management/.../order-history-columns.tsx
+    //   components/app/tabscontent/system-chef-area-management.tabscontent.tsx
+    //
+    // ⚠️ Ba chỗ đó cần mã của TỪNG AUTHORITY (`VIEW_KITCHEN_AREA`,
+    // `DELETE_ORDER`...), còn `getAuthScope()` chỉ trả mã của AUTHORITY GROUP.
+    // Hai độ hạt khác nhau — đừng thay thế bằng `usePermissions()`.
+    //
+    // Nguồn field trong `IUserInfo`, để không tra nhầm chỗ:
+    //   identity (phonenumber, firstName, lastName, dob, email, address, image,
+    //   isVerified*, language, isActive) ← shared-user, terminal ghép sẵn
+    //   role.name/slug/description + branch  ← terminal
+    //   quyền để ĐIỀU HƯỚNG (group codes)    ← getAuthScope() / usePermissions()
+    permissions?: IPermission[]
   }
   isVerifiedEmail: boolean
   isVerifiedPhonenumber: boolean

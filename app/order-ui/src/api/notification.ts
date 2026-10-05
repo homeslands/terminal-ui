@@ -6,7 +6,10 @@ import {
   IRegisterDeviceTokenRequest,
   IRegisterDeviceTokenResponse,
 } from '@/types'
-import { http } from '@/utils'
+// Import tu MODULE CU THE: tep nay bi `utils/http.ts` keo vao, nen di qua barrel
+// `@/utils` la tao vong `http.ts` -> day -> barrel -> `http-auth.ts` -> can
+// `attachAuthInterceptors` cua `http.ts` khi no moi danh gia mot nua.
+import http from '@/utils/http'
 
 export async function getAllNotifications(
   params: IAllNotificationRequest,

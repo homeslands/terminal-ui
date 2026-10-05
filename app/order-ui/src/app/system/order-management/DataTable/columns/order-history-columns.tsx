@@ -56,7 +56,7 @@ export const useOrderHistoryColumns = (): {
     )
     : [];
 
-  const userPermissionCodes = userInfo?.role.permissions.map(p => p.authority.code) ?? [];
+  const userPermissionCodes = (userInfo?.role.permissions ?? []).map(p => p.authority.code);
   const isDeletePermissionValid = hasPermissionInBoth("DELETE_ORDER", authorityGroupCodes, userPermissionCodes);
   const { mutate: exportPayment } = useExportPayment()
   const { mutate: exportOrderInvoice, isPending: isExporting } = useExportOrderInvoice()

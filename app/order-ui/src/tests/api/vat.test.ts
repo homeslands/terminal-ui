@@ -1,11 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock http BEFORE importing the module under test (vi.mock is hoisted)
+//
+// `attachAuthInterceptors` phải có trong mock: từ giai đoạn 1, `utils/http-auth`
+// import nó từ đây, và bất kỳ module nào kéo theo `@/utils` sẽ nạp `http-auth`
+// ⇒ thiếu export này thì file test đổ ngay lúc import, không tới được assertion
+// nào.
 vi.mock('@/utils/http', () => ({
   default: {
     get: vi.fn(),
     post: vi.fn(),
   },
+  attachAuthInterceptors: vi.fn(),
+  scheduleProactiveRefresh: vi.fn(),
+  clearProactiveRefresh: vi.fn(),
 }))
 
 import http from '@/utils/http'

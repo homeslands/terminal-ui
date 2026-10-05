@@ -19,6 +19,7 @@ import {
   getUserIdentityCode,
   getUsers,
   lockUser,
+  lookupGiftCardRecipient,
   replaceMembershipCard,
   resetPassword,
   toggleMembershipCard,
@@ -49,6 +50,28 @@ export const useUsers = (q: IUserQuery | null, enabled?: boolean) => {
     queryFn: () => (q ? getUsers(q) : Promise.resolve(null)),
     placeholderData: keepPreviousData,
     enabled: !!q && !!enabled,
+  })
+}
+
+/**
+ * Tra NGƯỜI NHẬN thẻ quà theo SĐT — cửa HẸP thay cho `useUsers` ở màn KHÁCH.
+ *
+ * Chỉ gọi khi SĐT **đủ 10 chữ số**: route backend khớp **tuyệt đối**
+ * (`/^0\d{9}$/`), nên một chuỗi ngắn hơn chắc chắn không ra ai — gọi là phí một
+ * lượt mạng. Kết quả nhiều nhất là MỘT dòng, nên không phân trang ở đây.
+ */
+export const useGiftCardRecipient = (
+  phonenumber: string | null,
+  enabled?: boolean,
+) => {
+  return useQuery({
+    queryKey: ['gift-card-recipient', phonenumber],
+    queryFn: () =>
+      phonenumber
+        ? lookupGiftCardRecipient(phonenumber)
+        : Promise.resolve(null),
+    placeholderData: keepPreviousData,
+    enabled: !!phonenumber && phonenumber.length === 10 && !!enabled,
   })
 }
 

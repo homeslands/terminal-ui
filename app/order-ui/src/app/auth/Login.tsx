@@ -15,8 +15,7 @@ import { LoginBackground } from '@/assets/images'
 import { LoginForm } from '@/components/app/form'
 import { useAuthStore, useCurrentUrlStore, useUserStore } from '@/stores'
 import { ROUTE } from '@/constants'
-import { jwtDecode } from 'jwt-decode'
-import { IToken } from '@/types'
+import { usePermissions } from '@/hooks'
 import { calculateSmartNavigationUrl, safeNavigate } from '@/utils'
 import { useTheme } from '@/components/app/theme-provider'
 
@@ -54,33 +53,25 @@ export default function Login() {
     )
   }, [isNavigating]) // Keep minimal dependencies để tránh stale closure
 
-  // Helper function để lấy permissions từ token
-  const getUserPermissions = useMemo(() => {
-    if (!token) return []
-
-    try {
-      const decoded: IToken = jwtDecode(token)
-      if (!decoded.scope) return []
-
-      const scope = typeof decoded.scope === "string" ? JSON.parse(decoded.scope) : decoded.scope
-      return scope.permissions || []
-    } catch {
-      return []
-    }
-  }, [token])
+  // Quyền lấy qua `GET {terminal}/auth/scope`, KHÔNG decode từ token: JWT do
+  // shared-user ký chỉ có `{ sub, jti, exp }`. Hook tự `enabled: !!token` nên ở
+  // màn này (chưa đăng nhập) nó không bắn request nào.
+  //
+  // Nhánh này chỉ chạy cho phiên ĐÃ CÓ SẴN (auto-redirect khi mở lại trang) —
+  // đăng nhập mới do `LoginForm` + `useHandleAuthSuccess` xử lý, và nhánh đó tự
+  // lấy scope rồi mồi cache, nên tới đây là đã có sẵn.
+  const permissions = usePermissions()
 
   // Helper function để tính toán URL navigation với smart logic
   const navigationUrl = useMemo(() => {
     if (!userInfo || !token) return ROUTE.HOME
-
-    const permissions = getUserPermissions
 
     return calculateSmartNavigationUrl({
       userInfo,
       permissions,
       currentUrl
     })
-  }, [userInfo, token, currentUrl, getUserPermissions])
+  }, [userInfo, token, currentUrl, permissions])
 
   // ✅ Safety effect để handle expired tokens sau khi component mount
   useEffect(() => {

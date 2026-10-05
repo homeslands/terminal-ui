@@ -24,10 +24,12 @@ Dev server proxies `/api/v1/*` → `VITE_BASE_API_URL` (strips the prefix). Set 
 ### App startup sequence
 
 `src/main.tsx` → `src/app/App.tsx`. The `App` component gates the entire UI behind `isAuthInitialized`. On mount it:
-1. Runs `useGlobalTokenValidator` to clean expired tokens from Zustand/localStorage.
-2. Initializes `deepLinkHandler` (Capacitor deep links) asynchronously.
-3. Validates auth state synchronously — if `token` exists but `isAuthenticated()` returns false, it calls `setLogout()` and clears user info.
-4. Sets `isAuthInitialized = true` (always in `finally`).
+1. Initializes `deepLinkHandler` (Capacitor deep links) asynchronously.
+2. Validates auth state synchronously, inline (there is no `useGlobalTokenValidator` hook here — `trend-ui` has one, this app does the same work in `App.tsx`):
+   - `isLegacyToken(token)` → force logout. A token from before the RS256 cutover carries `scope` in its payload and now 401s on every request; the refresh token is equally stale, so waiting for the interceptor produces a broken screen instead of the login screen.
+   - otherwise, `token` present but `isAuthenticated()` false → `setLogout()` + `removeUserInfo()`.
+   - the whole block is wrapped in try/catch: corrupt `localStorage` clears `auth-storage` / `user-info` rather than crashing the app.
+3. Sets `isAuthInitialized = true` (always in `finally`).
 
 **Never remove or move this gate.** Race conditions on auth state (stale localStorage, corrupted tokens) were the reason it exists.
 
