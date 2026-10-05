@@ -2,7 +2,7 @@ name: terminal-ui-dev
 
 services:
   terminal-ui:
-    image: ghcr.io/homeslands/terminal-ui:dev
+    image: ghcr.io/homeslands/terminal-service-ui:dev
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "5178"] # TCP check on port 5178
       interval: 10s # Increase interval between health checks
