@@ -50,6 +50,6 @@ jobs:
           context: ./app/order-ui
           file: ./.build/order-ui/Dockerfile
           tags: |
-            ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-ui:staging
-          labels: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-ui
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-service-ui:staging
+          labels: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-service-ui
           push: true
