@@ -52,8 +52,8 @@ jobs:
         with:
           context: ./app/order-ui
           file: ./.build/order-ui/Dockerfile
-          tags: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-ui:dev
-          labels: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-ui
+          tags: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-service-ui:dev
+          labels: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-service-ui
           push: true
 
       - name: Pull latest images on remote server

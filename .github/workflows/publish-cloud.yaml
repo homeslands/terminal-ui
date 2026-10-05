@@ -54,7 +54,7 @@ jobs:
           context: ./app/order-ui
           file: ./.build/order-ui/Dockerfile
           tags: |
-            ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-ui:latest
-            ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-ui:${{ env.VERSION }}
-          labels: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-ui
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-service-ui:latest
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-service-ui:${{ env.VERSION }}
+          labels: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/terminal-service-ui
           push: true
