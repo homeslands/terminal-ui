@@ -17,30 +17,17 @@ import {
 import { loginSchema } from '@/schemas'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ButtonLoading } from '@/components/app/loading'
-import { useLogin, useProfile } from '@/hooks'
-import { useAuthStore, useCartItemStore, useUserStore, useCurrentUrlStore } from '@/stores'
-import { showToast, calculateSmartNavigationUrl, safeNavigate } from '@/utils'
-import { scheduleProactiveRefresh } from '@/utils/http'
-import { useNavigate } from 'react-router-dom'
-import { jwtDecode } from 'jwt-decode'
-import { IToken } from '@/types'
-import { fcmTokenManager } from '@/services/fcm-token-manager'
+import { useLogin, useHandleAuthSuccess } from '@/hooks'
+import { showToast } from '@/utils'
 
 export const LoginForm: React.FC = () => {
   const { t } = useTranslation(['auth'])
-  const navigate = useNavigate()
-  const {
-    setToken,
-    setRefreshToken,
-    setExpireTime,
-    setExpireTimeRefreshToken,
-    setLogout
-  } = useAuthStore()
-  const { clearCart } = useCartItemStore()
-  const { setUserInfo, removeUserInfo } = useUserStore()
-  const { currentUrl, clearUrl } = useCurrentUrlStore()
   const { mutate: login, isPending } = useLogin()
-  const { refetch: refetchProfile } = useProfile()
+  // Toàn bộ phần việc sau đăng nhập (lưu token, lấy hồ sơ + quyền, mồi cache,
+  // hẹn refresh chủ động, FCM, điều hướng) nằm trong hook dùng chung —
+  // `Login.tsx` cũng cần đúng những bước đó. Trước đây logic bị nhân đôi ở hai
+  // chỗ, và cả hai đều tự decode quyền từ token (thứ token mới không còn mang).
+  const handleAuthSuccess = useHandleAuthSuccess()
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -53,82 +40,11 @@ export const LoginForm: React.FC = () => {
     login(data, {
       onSuccess: async (response) => {
         try {
-          clearCart()
-
-          // Set token before fetching profile
-          setToken(response.result.accessToken)
-          setRefreshToken(response.result.refreshToken)
-          setExpireTime(response.result.expireTime)
-          setExpireTimeRefreshToken(response.result.expireTimeRefreshToken)
-
-          // Fetch profile immediately after setting token
-          const profile = await refetchProfile()
-
-          if (profile.data) {
-            // Set userInfo after having data
-            setUserInfo(profile.data.result)
-
-            // Schedule proactive token refresh (2 min before expiry) so the
-            // first authenticated request after expiry doesn't pay the refresh
-            // round-trip latency.
-            scheduleProactiveRefresh()
-
-            // FCM token registration flow:
-            // 1. Initial register: handled by NotificationProvider's useFirebaseNotification(userInfo.slug)
-            //    hook which fires after userInfo updates here. The hook fetches FCM token from
-            //    Firebase (web) or native Capacitor plugin, then POSTs to BE.
-            // 2. Refresh/rotation: handled by fcmTokenManager.checkAndRefreshToken() running
-            //    on interval + visibility events.
-            //
-            // We ping checkAndRefreshToken() here as a safety net — if a token was saved in
-            // a prior session and is still valid, this triggers a timestamp refresh. If no
-            // token saved yet, it early-returns and the NotificationProvider hook will handle
-            // initial registration once it mounts.
-            void fcmTokenManager.checkAndRefreshToken()
-
-            showToast(t('toast.loginSuccess'))
-
-            // NAVIGATION LOGIC - Handle redirect after successful login
-            const userInfo = profile.data.result
-
-            // Get permissions from token to calculate navigation
-            let permissions: string[] = []
-            try {
-              const decoded: IToken = jwtDecode(response.result.accessToken)
-              if (decoded.scope) {
-                const scope = typeof decoded.scope === "string" ? JSON.parse(decoded.scope) : decoded.scope
-                permissions = scope.permissions || []
-              }
-            } catch {
-              permissions = []
-            }
-
-            // Calculate navigation URL
-            const navigationUrl = calculateSmartNavigationUrl({
-              userInfo,
-              permissions,
-              currentUrl
-            })
-            // Navigate to appropriate page
-            const navigationSuccess = safeNavigate(
-              navigate,
-              navigationUrl,
-              window.location.pathname
-            )
-
-            // Clear saved URL if navigation successful
-            if (navigationSuccess) {
-              clearUrl()
-            }
-          } else {
-            // If cannot fetch profile, rollback auth state
-            setLogout()
-            throw new Error('Failed to fetch user profile')
-          }
+          await handleAuthSuccess(response.result)
+          showToast(t('toast.loginSuccess'))
         } catch {
-          // Ensure clear all state if there is an error
-          setLogout()
-          removeUserInfo()
+          // Hook đã dọn auth state trước khi ném lại — ở đây chỉ báo cho người
+          // dùng. KHÔNG xoá dữ liệu vừa nhập trong form.
           showToast(t('toast.loginError') || 'Đăng nhập thất bại')
         }
       },

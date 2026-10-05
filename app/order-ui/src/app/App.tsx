@@ -12,7 +12,7 @@ import i18n from '@/i18n'
 
 import { router } from '@/router'
 import { IApiResponse } from '@/types'
-import { showErrorToast } from '@/utils'
+import { isLegacyToken, showErrorToast } from '@/utils'
 import { ThemeProvider } from '@/components/app/theme-provider'
 import { useAuthStore, useUserStore, subscribeToCrossTabAuthChanges } from '@/stores'
 import { Loader2 } from 'lucide-react'
@@ -89,7 +89,26 @@ function App() {
 
       // ⚠️ Wrap trong try-catch để tránh crash nếu localStorage corrupt
       try {
-        if (authStore.token && !authStore.isAuthenticated()) {
+        // FORCE LOGOUT cho token của phiên bản CŨ (giai đoạn 1).
+        //
+        // Người đang đăng nhập lúc phát hành mang token do `terminal` tự ký
+        // (HS256, payload có `scope`), trong khi `terminal` đã chuyển sang verify
+        // RS256 bằng public key của `shared-user` ⇒ **401 ở MỌI request**.
+        //
+        // Không thể chờ interceptor tự dọn: 401 đầu tiên sẽ kích hoạt refresh,
+        // refresh cũng 401 (refresh token cũ cũng do terminal ký), và người dùng
+        // thấy một màn hỏng thay vì màn đăng nhập lại. Phát hiện theo SHAPE của
+        // payload mới rồi dọn ngay là đường ngắn nhất.
+        //
+        // Nhận diện: token cũ có `scope`, token mới có `{ sub, jti, exp }`.
+        // Không verify chữ ký ở client (không có khoá, và cũng không phải việc
+        // của client) — chỉ đọc shape.
+        if (authStore.token && isLegacyToken(authStore.token)) {
+          // eslint-disable-next-line no-console
+          console.warn('[Auth] Token cũ (có `scope`) — buộc đăng nhập lại')
+          authStore.setLogout()
+          userStore.clearUserData()
+        } else if (authStore.token && !authStore.isAuthenticated()) {
           authStore.setLogout()
           userStore.removeUserInfo()
         }

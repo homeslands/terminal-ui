@@ -3,7 +3,9 @@
 import { registerDeviceToken } from '@/api/notification'
 import { RETRY_DELAYS, MAX_RETRIES } from '@/constants'
 import { useUserStore } from '@/stores'
-import { showErrorToastMessage } from '@/utils'
+// Import tu MODULE CU THE - cung ly do nhu `api/notification.ts`: tep nay nam
+// tren duong `utils/http.ts` keo vao, di qua barrel la tao vong import.
+import { showErrorToastMessage } from '@/utils/toast'
 
 interface QueueItem {
   token: string

@@ -7,7 +7,18 @@ import { ROUTE } from '@/constants'
 import { useUserStore } from './user.store'
 import { useCartItemStore } from './cart.store'
 import { useCurrentUrlStore } from './current-url.store'
-import { isValidRedirectUrl } from '@/utils'
+// ⚠️ Import từ MODULE CỤ THỂ, không qua barrel `@/utils`.
+//
+// `@/utils` → `./http` → `@/stores` → `auth.store` → `@/utils` là một VÒNG
+// TRÒN. Nó vô hại cho tới giai đoạn 1, khi barrel có thêm `./http-auth` NGAY SAU
+// `./http`: đi vào vòng qua barrel thì `./http` mới đánh giá được một nửa, rồi
+// barrel chạy tiếp tới `./http-auth`, và `attachAuthInterceptors` (khai báo ở
+// cuối `http.ts`) chưa tồn tại ⇒ `TypeError: attachAuthInterceptors is not a
+// function` ngay lúc import.
+//
+// Vì sao không thấy ở `trend-ui`: `auth.store.ts` bên đó không import `@/utils`,
+// nên vòng tròn này chỉ có ở `terminal-ui`.
+import { isValidRedirectUrl } from '@/utils/current-url-manager'
 
 export const useAuthStore = create<IAuthStore>()(
   persist(

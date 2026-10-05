@@ -1,6 +1,20 @@
+// ============================================================================
+// TOÀN BỘ tệp này gọi `http` (terminal) — và việc cần làm ở giai đoạn 1 là
+// ĐỪNG ĐỔI.
+//
+// Vì sao `resetPassword`/`lockUser` gọi `terminal` chứ không gọi thẳng
+// `shared-user`: quyền quyết định là **chức vụ trong cửa hàng**, dữ kiện đó nằm
+// ở `terminal`. Gọi thẳng `shared-user` là để nó gác bằng bản `role_tbl` của
+// chính nó — thứ không ai cập nhật khi `terminal` gán role ⇒ admin vừa được cấp
+// quyền bị 403 oan. Đó là rủi ro R1 mà `trend-ui` mất một đợt đi-rồi-về mới
+// đóng được; `terminal-ui` bỏ qua vòng đó.
+//
+// Mọi hàm quản trị truyền `user.slug` CỤC BỘ, không truyền `phonenumber`.
+// ============================================================================
 import { http } from '@/utils'
 import {
   IApiResponse,
+  IGiftCardRecipient,
   IUserInfo,
   IPaginationResponse,
   IUserQuery,
@@ -28,6 +42,27 @@ export async function getUsers(
     {
       params,
     },
+  )
+  return response.data
+}
+
+/**
+ * Tra NGƯỜI NHẬN thẻ quà theo SĐT — cửa HẸP thay cho `GET /user` ở màn KHÁCH.
+ *
+ * `GET /user` từ giai đoạn 1 đã gác bằng role và **không nhận `Customer`** (nó
+ * trả cả danh sách khách kèm SĐT / họ tên / email). Màn khách mua thẻ quà tặng
+ * người khác thì vẫn cần tra một người nhận, nên backend tách route riêng: khớp
+ * SĐT **tuyệt đối**, trả **tối đa 1 người**, chỉ `slug` + `phonenumber` + họ tên.
+ *
+ * Dùng `http` (terminal), không phải `httpAuth` — và **không** quay lại
+ * `GET {shared-user}/user?phonenumber=` (khớp chuỗi con, chính là R6).
+ */
+export async function lookupGiftCardRecipient(
+  phonenumber: string,
+): Promise<IApiResponse<IGiftCardRecipient[]>> {
+  const response = await http.get<IApiResponse<IGiftCardRecipient[]>>(
+    '/user/lookup-recipient',
+    { params: { phonenumber } },
   )
   return response.data
 }

@@ -19,12 +19,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { IUpdateProfileRequest, IUserInfo } from '@/types'
 import { useUpdateProfile } from '@/hooks'
 import { showToast } from '@/utils'
-import { BranchSelect } from '@/components/app/select'
 import { DatePicker } from '@/components/app/picker'
 import { useUserStore } from '@/stores'
 import { getProfile } from '@/api'
 import { useQueryClient } from '@tanstack/react-query'
-import { Role } from '@/constants'
+import { QUERYKEY } from '@/constants'
 
 interface IFormUpdateProfileProps {
   userProfile?: IUserInfo
@@ -37,7 +36,7 @@ export const UpdateProfileForm: React.FC<IFormUpdateProfileProps> = ({
 }) => {
   const queryClient = useQueryClient()
   const { t } = useTranslation(['profile'])
-  const { userInfo, setUserInfo } = useUserStore()
+  const { setUserInfo } = useUserStore()
   const { mutate: createProductVariant } = useUpdateProfile()
   const form = useForm<TUpdateProfileSchema>({
     resolver: zodResolver(useUpdateProfileSchema()),
@@ -47,7 +46,6 @@ export const UpdateProfileForm: React.FC<IFormUpdateProfileProps> = ({
       // email: userProfile?.email || '',
       dob: userProfile?.dob || '',
       address: userProfile?.address || '',
-      branch: userProfile?.branch?.slug || '',
     },
   })
 
@@ -57,8 +55,12 @@ export const UpdateProfileForm: React.FC<IFormUpdateProfileProps> = ({
         getProfile().then((data) => {
           setUserInfo(data.result)
         })
+        // `[QUERYKEY.profile]` - dung khoa ma `useProfile()` dang dung.
+        // Chuoi tran `'profile'` KHONG khop khoa `[['profile']]` cua no
+        // (react-query khop theo tien to, phan tu dau la mang chu khong phai
+        // chuoi). Xem chu thich o `hooks/use-profile.ts`.
         queryClient.invalidateQueries({
-          queryKey: ['profile'],
+          queryKey: [QUERYKEY.profile],
         })
         onSubmit(false)
         form.reset()
@@ -151,22 +153,11 @@ export const UpdateProfileForm: React.FC<IFormUpdateProfileProps> = ({
         )}
       />
     ),
-    branch: (
-      userInfo?.role?.name === Role.SUPER_ADMIN || userInfo?.role?.name === Role.ADMIN) && (
-        <FormField
-          control={form.control}
-          name="branch"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('profile.branch')}</FormLabel>
-              <FormControl>
-                <BranchSelect onChange={field.onChange} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      ),
+    // Branch không còn sửa được qua form này — branch thuộc terminal, PATCH
+    // /auth/profile chỉ ghi identity vào shared-user, sửa branch qua đây sẽ
+    // vô tác dụng (không đồng bộ ngược, và trang xem hồ sơ giờ hiển thị
+    // branch lấy từ terminal, không phải từ shared-user nữa). Xem
+    // architect-http.md mục 1.1 quy tắc 4.
   }
 
   return (

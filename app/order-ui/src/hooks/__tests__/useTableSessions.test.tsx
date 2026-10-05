@@ -5,12 +5,22 @@ import { useTableSessionsStore } from '@/stores'
 import { STORAGE_KEYS } from '@/data/staff-data'
 import type { OrderItem } from '@/types/session'
 
-vi.mock('@/utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/utils')>()
+// Mock MODULE CỤ THỂ `@/utils/toast`, không phải barrel `@/utils`.
+//
+// Từ giai đoạn 1, `stores/table-sessions.store.ts` import
+// `showErrorToastMessage` thẳng từ `@/utils/toast` để gỡ vòng import qua
+// barrel (xem `tests/utils/barrel-import-cycle.test.ts`). Mock barrel sau đợt
+// đó không còn chặn được lệnh gọi nào — hai ca "custom price" dưới đây đỏ vì
+// spy không bao giờ được gọi, trong khi store vẫn chạy đúng.
+//
+// Mock ở module cụ thể thì chặt hơn: barrel re-export từ chính `./toast` nên
+// cả hai đường import đều nhận bản mock này.
+vi.mock('@/utils/toast', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/toast')>()
   return { ...actual, showErrorToastMessage: vi.fn() }
 })
 
-import { showErrorToastMessage } from '@/utils'
+import { showErrorToastMessage } from '@/utils/toast'
 
 const item = (overrides: Partial<OrderItem> = {}): OrderItem => ({
   menuItemId: 'm1',

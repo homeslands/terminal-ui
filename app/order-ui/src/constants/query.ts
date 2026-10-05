@@ -1,5 +1,8 @@
 export const QUERYKEY = {
   profile: ['profile'],
+  // Nguồn quyền của giao diện — `GET {terminal}/auth/scope`. Xem
+  // hooks/use-permissions.ts.
+  authScope: ['authScope'],
   branches: ['branches'],
   catalog: ['catalog'],
   chefAreaPrinters: ['chefAreaPrinters'],

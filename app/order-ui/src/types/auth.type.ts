@@ -1,4 +1,5 @@
 import { VerificationMethod } from '@/constants'
+import { IUserInfo } from './user.type'
 
 export interface ILoginRequest {
   phonenumber: string
@@ -58,9 +59,31 @@ export interface IRefreshTokenResponse {
   refreshToken: string
 }
 
+/**
+ * Payload THẬT của JWT do `shared-user` ký — đúng ba field.
+ *
+ * ⛔ `scope` đã bị BỎ, và việc bỏ nó là phần quan trọng nhất của đợt này. Token
+ * mới decode **thành công** (nó là JWT hợp lệ), chỉ là không có `scope` ⇒ mọi
+ * chỗ đọc `decoded.scope` trả mảng rỗng, không exception, không log. Hệ quả:
+ * menu trống, mọi route có permission bị chặn, người dùng đăng nhập được nhưng
+ * không vào được đâu cả — nhìn từ ngoài giống hệt "tài khoản này không có
+ * quyền". Giữ `scope` trong type là để lại đúng cái bẫy đó cho người sửa sau.
+ *
+ * Quyền lấy qua `GET {terminal}/auth/scope` → `usePermissions()`.
+ */
 export interface IToken {
-  scope: {
-    role: string
-    permissions: string[]
-  }
+  sub: string
+  jti: string
+  exp?: number
+}
+
+/**
+ * Response của `GET {terminal}/auth/scope` — nguồn quyền duy nhất của giao diện.
+ */
+export interface IAuthScope {
+  role: string
+  permissions: string[]
+  // Nguồn thật cho branch (architect-http.md mục 1.1 quy tắc 4) — không lấy
+  // branch từ response profile của shared-user, service đó không có field này.
+  branch: IUserInfo['branch']
 }

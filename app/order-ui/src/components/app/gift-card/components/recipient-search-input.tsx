@@ -2,10 +2,9 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { User2Icon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { IUserInfo } from '@/types'
-import { useDebouncedInput, usePagination, useUsers } from '@/hooks'
+import { IGiftCardRecipient, IUserInfo } from '@/types'
+import { useDebouncedInput, useGiftCardRecipient } from '@/hooks'
 import { Input } from '@/components/ui'
-import { Role } from '@/constants'
 
 interface RecipientSearchInputProps {
   value: string
@@ -27,35 +26,36 @@ export default function RecipientSearchInput({
   userInfo,
 }: RecipientSearchInputProps) {
   const { t } = useTranslation(['giftCard'])
-  const [users, setUsers] = useState<IUserInfo[]>([])
-  const [selectedUser, setSelectedUser] = useState<IUserInfo | null>(null)
-  const { pagination, setPagination } = usePagination()
+  const [users, setUsers] = useState<IGiftCardRecipient[]>([])
+  const [selectedUser, setSelectedUser] = useState<IGiftCardRecipient | null>(
+    null,
+  )
   const { inputValue, setInputValue, debouncedInputValue } = useDebouncedInput()
   const userListRef = useRef<HTMLDivElement>(null)
 
   // Helper function to check if we should search
   const searchCondition =
     debouncedInputValue && !selectedUser && debouncedInputValue.length === 10
-  const { data: userByPhoneNumber } = useUsers(
-    searchCondition
-      ? {
-        order: 'DESC',
-        page: pagination.pageIndex,
-        size: pagination.pageSize,
-        phonenumber: debouncedInputValue,
-        role: Role.CUSTOMER,
-        hasPaging: true,
-      }
-      : null,
-    true
+
+  // Đổi ở giai đoạn 1 — trước đây ô này gọi `useUsers({ phonenumber })` tức
+  // `GET {terminal}/user`, mà route đó nay gác bằng role và **không nhận
+  // `Customer`**: nó trả cả danh sách khách kèm SĐT / họ tên / email, khách
+  // không được thấy. Cửa hẹp thay thế: `GET /user/lookup-recipient` — khớp SĐT
+  // **tuyệt đối**, trả tối đa 1 người và chỉ bốn field.
+  //
+  // Vì thế không còn phân trang / cuộn vô tận ở đây nữa: kết quả nhiều nhất là
+  // một dòng.
+  const { data: userByPhoneNumber } = useGiftCardRecipient(
+    searchCondition ? debouncedInputValue : null,
+    true,
   )
   const handleSelectUser = useCallback(
-    (user: IUserInfo) => () => {
+    (user: IGiftCardRecipient | IUserInfo) => () => {
       setSelectedUser(user)
       setUsers([])
       setInputValue(user.phonenumber)
       onChange(user.slug || '')
-      onUserSelect?.(user)
+      onUserSelect?.(user as IUserInfo)
     },
     [onChange, onUserSelect, setInputValue, setSelectedUser, setUsers],
   )
@@ -90,25 +90,10 @@ export default function RecipientSearchInput({
   useEffect(() => {
     if (!searchCondition || selectedUser) {
       setUsers([])
-    } else if (userByPhoneNumber?.result?.items) {
-      if (pagination.pageIndex === 1) {
-        setUsers(userByPhoneNumber.result.items)
-      } else {
-        setUsers((prev) => [...prev, ...userByPhoneNumber.result.items])
-      }
+    } else if (userByPhoneNumber?.result) {
+      setUsers(userByPhoneNumber.result)
     }
-  }, [searchCondition, userByPhoneNumber, pagination.pageIndex, selectedUser])
-  const handleScroll = () => {
-    if (userListRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = userListRef.current
-      if (scrollTop + clientHeight >= scrollHeight - 20) {
-        setPagination((prev) => ({
-          ...prev,
-          pageIndex: prev.pageIndex + 1,
-        }))
-      }
-    }
-  }
+  }, [searchCondition, userByPhoneNumber, selectedUser])
 
   return (
     <div className="flex relative flex-col gap-3">
@@ -155,7 +140,7 @@ export default function RecipientSearchInput({
           !selectedUser &&
           searchCondition &&
           userByPhoneNumber &&
-          userByPhoneNumber.result?.items?.length === 0 && (
+          userByPhoneNumber.result?.length === 0 && (
             <div className="text-xs text-red-500">
               {t('giftCard.phoneNumberNotFound')}
             </div>
@@ -165,7 +150,6 @@ export default function RecipientSearchInput({
       {users.length > 0 && searchCondition && (
         <div
           ref={userListRef}
-          onScroll={handleScroll}
           className="overflow-y-auto absolute z-50 mt-11 w-full max-h-96 bg-white rounded-md border shadow-lg dark:bg-gray-800"
         >
           {users.map((user, index) => (

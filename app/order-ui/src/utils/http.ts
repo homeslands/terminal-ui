@@ -9,7 +9,7 @@ import moment from 'moment'
 import { useCurrentUrlStore, useRequestStore } from '@/stores'
 import { useAuthStore } from '@/stores'
 import { IApiResponse, IRefreshTokenResponse } from '@/types'
-import { baseURL, ROUTE } from '@/constants'
+import { authURL, baseURL, ROUTE } from '@/constants'
 import { useLoadingStore } from '@/stores'
 import { showErrorToast } from './toast'
 import { isValidRedirectUrl } from './current-url-manager'
@@ -18,6 +18,12 @@ import { setServerTimeOffsetFromHeader } from '@/lib/server-time'
 
 NProgress.configure({ showSpinner: false, trickleSpeed: 200 })
 
+// ⚠️ isRefreshing / failedQueue PHẢI ở MODULE SCOPE và dùng chung cho CẢ HAI
+// client (`http` → terminal, `httpAuth` → shared-user).
+//
+// Hai hàng đợi riêng ⇒ client này dùng refresh token mà client kia vừa xoay
+// vòng ⇒ đăng xuất ngẫu nhiên giữa phiên. Đây là lý do `attachAuthInterceptors`
+// nằm trong CHÍNH tệp này thay vì một module riêng.
 let isRefreshing = false
 let failedQueue: {
   resolve: (token: string) => void
@@ -93,12 +99,24 @@ function forceLogoutAndRedirect() {
 }
 
 /**
- * Trigger a token refresh. Used by both interceptor (reactive) and scheduler (proactive).
- * Updates auth store on success. Throws on failure (caller decides logout/redirect).
- * Returns the new access token on success.
+ * Trigger a token refresh. Used by ALL THREE refresh paths: the proactive
+ * scheduler, the request interceptor (token already expired), and the response
+ * interceptor (got a 401). Updates auth store on success. Throws on failure
+ * (caller decides logout/redirect). Returns the new access token on success.
  *
- * Uses plain `axios.post` (not `axiosInstance`) to bypass our own interceptors
+ * Uses plain `axios.post` (not an instance) to bypass our own interceptors
  * and avoid recursion.
+ *
+ * ⚠️ `authURL`, KHÔNG phải `baseURL`. Refresh token luôn do `shared-user` phát
+ * hành/gia hạn; `terminal` không còn giữ route `/auth/refresh` (đã xoá ở giai
+ * đoạn 1). Dù request gốc gãy ở `terminal` hay ở `shared-user` thì cũng phải
+ * refresh ở đây.
+ *
+ * Ba đường refresh ĐI QUA ĐÚNG HÀM NÀY chứ không mỗi đường một bản `axios.post`
+ * riêng: trước đây có ba bản, nên "sửa URL refresh" là ba chỗ phải sửa và sót
+ * một chỗ thì lỗi chỉ hiện ra sau ~13 phút chạy — rất khó tái hiện lúc test
+ * tay. Gộp lại để invariant "chỉ có một URL refresh" là CẤU TRÚC, không phải
+ * kết quả của một lần grep.
  */
 async function triggerRefresh(): Promise<string> {
   const state = useAuthStore.getState()
@@ -109,7 +127,7 @@ async function triggerRefresh(): Promise<string> {
   }
 
   const response: AxiosResponse<IApiResponse<IRefreshTokenResponse>> =
-    await axios.post(`${baseURL}/auth/refresh`, {
+    await axios.post(`${authURL}/auth/refresh`, {
       refreshToken,
       accessToken: oldToken,
     })
@@ -124,6 +142,19 @@ async function triggerRefresh(): Promise<string> {
   state.setExpireTime(data.expireTime)
   state.setExpireTimeRefreshToken(data.expireTimeRefreshToken)
   return data.accessToken
+}
+
+/**
+ * Phần việc chung sau một lần refresh THÀNH CÔNG: mở khoá hàng đợi, đồng bộ
+ * FCM (best-effort), và hẹn vòng refresh chủ động tiếp theo.
+ */
+function afterRefreshSuccess(newToken: string) {
+  // ✅ Process queue trước để unblock API calls
+  processQueue(null, newToken)
+  syncFcmTokenAfterRefresh().catch(() => undefined)
+  // Chain the next proactive refresh cycle (in case the previous one bailed
+  // because we were already refreshing).
+  scheduleProactiveRefresh()
 }
 
 let refreshTimerId: ReturnType<typeof setTimeout> | null = null
@@ -164,12 +195,7 @@ export function scheduleProactiveRefresh() {
     isRefreshing = true
     try {
       const newToken = await triggerRefresh()
-      // Unblock any requests that queued up while we were refreshing.
-      processQueue(null, newToken)
-      // Best-effort FCM sync to mirror the reactive refresh path.
-      syncFcmTokenAfterRefresh().catch(() => undefined)
-      // Chain the next proactive cycle using the new expireTime.
-      scheduleProactiveRefresh()
+      afterRefreshSuccess(newToken)
     } catch (err) {
       // Reject any queued requests so they don't hang.
       processQueue(err, null)
@@ -201,13 +227,33 @@ const axiosInstance: AxiosInstance = axios.create({
   timeout: 10000,
   withCredentials: true,
 })
+
 // Public routes configuration
+//
+// Danh sách này dùng chung cho CẢ HAI client, nên nó chứa cả path của
+// `terminal` lẫn path của `shared-user`. Không tách làm hai: cùng một
+// interceptor thì cùng một bảng, và một path chỉ public ở đúng một service nên
+// không có va chạm.
 const publicRoutes = [
+  // ---- shared-user (httpAuth): người gọi CHƯA có token ----
+  //
+  // ⚠️ Nhóm nhiều bước `register/*` và `forgot-password/*` BẮT BUỘC phải có ở
+  // đây. Thiếu chúng thì request interceptor chặn ngay tại chỗ với
+  // `new Error('User is not authenticated')` — không phải 401 từ server, mà là
+  // một Error do chính client ném ra, nên nhìn từ tab Network sẽ KHÔNG THẤY GÌ
+  // CẢ. Bản trước của danh sách này chỉ có `/auth/forgot-password` (một bước),
+  // không khớp `/auth/forgot-password/initiate` của luồng nhiều bước đang dùng.
   { path: /^\/auth\/login$/, methods: ['post'] },
   { path: /^\/auth\/register$/, methods: ['post'] },
+  { path: /^\/auth\/register\/(initiate|resend|complete)$/, methods: ['post'] },
   { path: /^\/auth\/refresh$/, methods: ['post'] },
   { path: /^\/auth\/forgot-password$/, methods: ['post'] },
   { path: /^\/auth\/forgot-password\/token$/, methods: ['post'] },
+  {
+    path: /^\/auth\/forgot-password\/(initiate|resend|confirm|change)$/,
+    methods: ['post'],
+  },
+  // ---- terminal (http) ----
   { path: /^\/orders\/public$/, methods: ['post'] },
   { path: /^\/orders\/[^/]+$/, methods: ['get'] }, // get order by slug
   { path: /^\/orders\/[^/]+\/public$/, methods: ['delete'] }, // delete order by slug
@@ -239,102 +285,88 @@ const isPublicRoute = (url: string, method: string): boolean => {
 }
 
 // Consolidated request interceptor
-axiosInstance.interceptors.request.use(
-  async (config: InternalAxiosRequestConfig) => {
-    const authStore = useAuthStore.getState()
-    // const {clearCart} = useCartItemStore()
-    const {
-      token,
-      expireTime,
-      refreshToken,
-      setExpireTime,
-      setToken,
-      setRefreshToken,
-      setExpireTimeRefreshToken,
-      isAuthenticated,
-    } = authStore
+async function authRequestInterceptor(config: InternalAxiosRequestConfig) {
+  const authStore = useAuthStore.getState()
+  // const {clearCart} = useCartItemStore()
+  const { token, expireTime, isAuthenticated } = authStore
 
-    if (config.url) {
-      if (isPublicRoute(config.url, config.method || '')) return config
+  if (config.url) {
+    if (isPublicRoute(config.url, config.method || '')) return config
+  }
+
+  if (!isAuthenticated()) {
+    return Promise.reject(new Error('User is not authenticated'))
+  }
+
+  if (expireTime && isTokenExpired(expireTime) && !isRefreshing) {
+    isRefreshing = true
+    try {
+      const newToken = await triggerRefresh()
+      afterRefreshSuccess(newToken)
+    } catch (error) {
+      processQueue(error, null)
+      // clearCart()
+      forceLogoutAndRedirect()
+    } finally {
+      isRefreshing = false
     }
-
-    if (!isAuthenticated()) {
-      return Promise.reject(new Error('User is not authenticated'))
-    }
-
-    if (expireTime && isTokenExpired(expireTime) && !isRefreshing) {
-      isRefreshing = true
-      try {
-        const response: AxiosResponse<IApiResponse<IRefreshTokenResponse>> =
-          await axios.post(`${baseURL}/auth/refresh`, {
-            refreshToken,
-            accessToken: token,
-          })
-
-        const newToken = response.data.result.accessToken
-        setToken(newToken)
-        setRefreshToken(response.data.result.refreshToken)
-        setExpireTime(response.data.result.expireTime)
-        setExpireTimeRefreshToken(response.data.result.expireTimeRefreshToken)
-
-        // ✅ Process queue trước để unblock API calls
-        processQueue(null, newToken)
-
-        syncFcmTokenAfterRefresh().catch(() => undefined)
-        // Chain the next proactive refresh cycle (in case the previous one bailed
-        // because we were already refreshing).
-        scheduleProactiveRefresh()
-      } catch (error) {
-        processQueue(error, null)
-        // clearCart()
-        forceLogoutAndRedirect()
-      } finally {
-        isRefreshing = false
-      }
-    } else if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        failedQueue.push({
-          resolve: (currentToken: string) => {
-            config.headers['Authorization'] = `Bearer ${currentToken}`
-            resolve(config)
-          },
-          reject: (error: unknown) => {
-            reject(error)
-          },
-        })
+  } else if (isRefreshing) {
+    return new Promise<InternalAxiosRequestConfig>((resolve, reject) => {
+      failedQueue.push({
+        resolve: (currentToken: string) => {
+          config.headers['Authorization'] = `Bearer ${currentToken}`
+          resolve(config)
+        },
+        reject: (error: unknown) => {
+          reject(error)
+        },
       })
-    }
+    })
+  }
 
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`
-      if (!config.doNotShowLoading) {
-        useLoadingStore.getState().setIsLoading(true)
-        const requestStore = useRequestStore.getState()
-        if (requestStore.requestQueueSize === 0) {
-          NProgress.start()
-        }
-        requestStore.incrementRequestQueueSize()
+  // Đọc lại token từ store: nhánh refresh ở trên vừa có thể đã xoay vòng nó,
+  // còn `token` destructure lúc đầu hàm là ảnh chụp CŨ.
+  const currentToken = useAuthStore.getState().token ?? token
+  if (currentToken) {
+    config.headers['Authorization'] = `Bearer ${currentToken}`
+    if (!config.doNotShowLoading) {
+      useLoadingStore.getState().setIsLoading(true)
+      const requestStore = useRequestStore.getState()
+      if (requestStore.requestQueueSize === 0) {
+        NProgress.start()
       }
+      requestStore.incrementRequestQueueSize()
     }
-    return config
-  },
-  (error) => {
-    useLoadingStore.getState().setIsLoading(false)
-    return Promise.reject(error)
-  },
-)
+  }
+  return config
+}
+
+function authRequestErrorHandler(error: unknown) {
+  useLoadingStore.getState().setIsLoading(false)
+  return Promise.reject(error)
+}
 
 // Consolidated response interceptor
-axiosInstance.interceptors.response.use(
-  (response) => {
-    useLoadingStore.getState().setIsLoading(false)
-    if (!response.config?.doNotShowLoading) setProgressBarDone()
-    // Keep client clock in sync with the server (case 19 — clock skew).
-    const dateHeader = response.headers?.date as string | undefined
-    setServerTimeOffsetFromHeader(dateHeader)
-    return response
-  },
-  async (error) => {
+function authResponseInterceptor(response: AxiosResponse) {
+  useLoadingStore.getState().setIsLoading(false)
+  if (!response.config?.doNotShowLoading) setProgressBarDone()
+  // Keep client clock in sync with the server (case 19 — clock skew).
+  const dateHeader = response.headers?.date as string | undefined
+  setServerTimeOffsetFromHeader(dateHeader)
+  return response
+}
+
+/**
+ * `instance` là client mà interceptor này được gắn vào. Nhánh retry sau 401
+ * phải phát lại request trên ĐÚNG client đó, không phải trên một client cố
+ * định: một request gãy ở `shared-user` mà phát lại qua client `terminal` thì
+ * đi sai baseURL và ra 404, còn log thì chỉ thấy "retry xong vẫn lỗi".
+ */
+function makeAuthResponseErrorHandler(instance: AxiosInstance) {
+  return async function authResponseErrorHandler(error: {
+    config?: InternalAxiosRequestConfig
+    response?: { status?: number }
+  }) {
     const originalRequest = error.config as InternalAxiosRequestConfig
     const is401 = error.response?.status === 401
     const alreadyRetried = originalRequest?._retry === true
@@ -342,7 +374,7 @@ axiosInstance.interceptors.response.use(
     const willRetry = is401 && !alreadyRetried && !isRefreshEndpoint
 
     useLoadingStore.getState().setIsLoading(false)
-    if (!willRetry && !error.config?.doNotShowLoading) setProgressBarDone()
+    if (!willRetry && !originalRequest?.doNotShowLoading) setProgressBarDone()
 
     if (willRetry) {
       originalRequest._retry = true
@@ -352,38 +384,20 @@ axiosInstance.interceptors.response.use(
           failedQueue.push({
             resolve: (token: string) => {
               originalRequest.headers['Authorization'] = `Bearer ${token}`
-              resolve(axiosInstance(originalRequest))
+              resolve(instance(originalRequest))
             },
             reject,
           })
         })
       }
 
-      const authStore = useAuthStore.getState()
-      const { refreshToken, token, setToken, setRefreshToken, setExpireTime, setExpireTimeRefreshToken } = authStore
-
       isRefreshing = true
       try {
-        const refreshResponse: AxiosResponse<IApiResponse<IRefreshTokenResponse>> =
-          await axios.post(`${baseURL}/auth/refresh`, {
-            refreshToken,
-            accessToken: token,
-          })
-
-        const newToken = refreshResponse.data.result.accessToken
-        setToken(newToken)
-        setRefreshToken(refreshResponse.data.result.refreshToken)
-        setExpireTime(refreshResponse.data.result.expireTime)
-        setExpireTimeRefreshToken(refreshResponse.data.result.expireTimeRefreshToken)
-
-        processQueue(null, newToken)
-        syncFcmTokenAfterRefresh().catch(() => undefined)
-        // Chain the next proactive refresh cycle (in case the previous one bailed
-        // because we were already refreshing).
-        scheduleProactiveRefresh()
+        const newToken = await triggerRefresh()
+        afterRefreshSuccess(newToken)
 
         originalRequest.headers['Authorization'] = `Bearer ${newToken}`
-        return axiosInstance(originalRequest)
+        return instance(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
         forceLogoutAndRedirect()
@@ -394,8 +408,28 @@ axiosInstance.interceptors.response.use(
     }
 
     return Promise.reject(error)
-  },
-)
+  }
+}
+
+/**
+ * Gắn cùng bộ interceptor (token, refresh, loading bar) cho mọi axios instance
+ * trong app — dùng chung một trạng thái `isRefreshing`/`failedQueue` để 2
+ * client (terminal + shared-user) không đua nhau refresh cùng lúc.
+ *
+ * Xem `utils/http-auth.ts`.
+ */
+export function attachAuthInterceptors(instance: AxiosInstance) {
+  instance.interceptors.request.use(
+    authRequestInterceptor,
+    authRequestErrorHandler,
+  )
+  instance.interceptors.response.use(
+    authResponseInterceptor,
+    makeAuthResponseErrorHandler(instance),
+  )
+}
+
+attachAuthInterceptors(axiosInstance)
 
 async function setProgressBarDone() {
   useRequestStore.setState({
