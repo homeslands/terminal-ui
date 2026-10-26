@@ -114,6 +114,7 @@ const errorCodes: { [key: number]: string } = {
   135503: 'toast.mustChangeSizeOfVariantsBeforeDelete',
   137000: 'toast.userNotFound',
   137003: 'toast.languageNotFound',
+  137006: 'toast.cannotAssignCustomerRole',
   139000: 'toast.roleNotFound',
   140000: 'toast.systemConfigKeyInvalid',
   140001: 'toast.systemConfigValueInvalid',
@@ -345,6 +346,9 @@ const errorCodes: { [key: number]: string } = {
   161004: 'toast.workShiftForbidden',
   161005: 'toast.workShiftNotActive',
   161006: 'toast.workShiftPaymentForbiddenForStaff',
+  // `terminal` khong goi duoc `shared-user` (HTTP 503 - sai lech D9). Ma chung
+  // cua moi loi nay tu buoc 2.4, khai song doi voi `trend-ui`.
+  162001: 'toast.sharedUserUnavailable',
 }
 
 function translate(key: string): string {
