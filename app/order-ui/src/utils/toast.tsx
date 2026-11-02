@@ -114,6 +114,7 @@ const errorCodes: { [key: number]: string } = {
   135503: 'toast.mustChangeSizeOfVariantsBeforeDelete',
   137000: 'toast.userNotFound',
   137003: 'toast.languageNotFound',
+  137006: 'toast.cannotAssignCustomerRole',
   139000: 'toast.roleNotFound',
   140000: 'toast.systemConfigKeyInvalid',
   140001: 'toast.systemConfigValueInvalid',
@@ -330,6 +331,17 @@ const errorCodes: { [key: number]: string } = {
   159802: 'toast.membershipCardCodeRequired',
   159908: 'toast.campaignDurationRequiredWhenHasNoEndDate',
   159805: 'toast.membershipCardAlreadyExists',
+  // Tu buoc 2.5 the thanh vien do `shared-user` giu, nen bon ma nay di
+  // nguyen tu do ra UI thay vi bi `terminal` dich het ve 159805. Truoc 2.5
+  // chung chua bao gio toi UI nen chua co cau dich.
+  159801: 'toast.membershipCardNotFound',
+  159803: 'toast.userAlreadyHasAMembershipCard',
+  159807: 'toast.membershipCardCodeAlreadyExists',
+  159808: 'toast.membershipCardExpired',
+  159806: 'toast.errorWhenDeleteMembershipCard',
+  159809: 'toast.errorWhenCreateMembershipCards',
+  159804: 'toast.userSlugRequired',
+  159810: 'toast.membershipCardUserIsNotTheOrderOwner',
   158006: 'toast.cardPointAlreadyExists',
   158007: 'toast.cardTitleAlreadyExists',
   160201: 'toast.qrTokenIsInvalidOrExpired',
@@ -345,6 +357,9 @@ const errorCodes: { [key: number]: string } = {
   161004: 'toast.workShiftForbidden',
   161005: 'toast.workShiftNotActive',
   161006: 'toast.workShiftPaymentForbiddenForStaff',
+  // `terminal` khong goi duoc `shared-user` (HTTP 503 - sai lech D9). Ma chung
+  // cua moi loi nay tu buoc 2.4, khai song doi voi `trend-ui`.
+  162001: 'toast.sharedUserUnavailable',
 }
 
 function translate(key: string): string {
