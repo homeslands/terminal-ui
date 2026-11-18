@@ -30,6 +30,17 @@ export interface IPointTransactionQuery {
   k?: string
 }
 
+// Step 7.8: query of GET {shared-user}/point-transaction (self view). The user
+// comes from the JWT, the query names nobody; the dates are startDate / endDate
+// there (fromDate / toDate are the names of the terminal routes).
+export interface IMyPointTransactionQuery {
+  page?: number
+  size?: number
+  type?: PointTransactionType | null
+  startDate?: string // YYYY-MM-DD format
+  endDate?: string // YYYY-MM-DD format
+}
+
 export interface UsePointTransactionsFilters {
   fromDate?: string
   toDate?: string
